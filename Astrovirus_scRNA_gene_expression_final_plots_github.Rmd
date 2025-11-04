@@ -1,0 +1,4353 @@
+---
+title: "Harshad_scRNA_gene_expression"
+---
+title: "Harshad_scRNA_gene_expression"
+author: "Leran Wang"
+date: "08/11/2022"
+output: html_notebook
+runtime: shiny
+resource_files:
+- combined.all.h5seurat
+- combined.all.annotated.h5seurat
+- Harshad.seurat.update.h5Seurat
+---
+
+```{r setup, include=FALSE,echo=FALSE,warning=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message=FALSE,warning = FALSE,fig.width=12, fig.height=8)
+
+
+library(Seurat);packageVersion("Seurat")
+library(SeuratDisk);packageVersion("SeuratDisk")
+library(ggplot2);packageVersion("ggplot2")
+library(ggpubr);packageVersion("ggpubr")
+library(plotly);packageVersion("plotly")
+library(ggrepel);packageVersion("ggrepel")
+library(gridExtra);packageVersion("gridExtra")
+library("viridis") ;packageVersion("viridis")
+library('svglite');packageVersion('svglite')
+library(fgsea);packageVersion("fgsea")
+library(msigdbr);packageVersion("msigdbr")
+library(tidyverse);packageVersion("tidyverse")
+library(SeuratDisk)
+library(tidyverse)
+library(dplyr)
+library(data.table)
+
+
+```
+
+
+
+# load the annotated combined.all seurat
+```{r}
+
+
+combined.all.final <- SeuratDisk::LoadH5Seurat("~/scRNA/Harshad/annotation/combined.all.annotated.final.h5seurat")
+
+
+# modify the cluster names
+combined.all.final$modified.ident <- factor(combined.all.final$modified.ident,levels = c("Wtnaive","WTFFT","Rag2Il2rg","Rag2Il2rgIfnlr1"))
+
+# add modified cell annotations
+combined.all.final@meta.data <- combined.all.final@meta.data %>%
+                          mutate("custome.cell.annotation.final" = ifelse(custom.cell.annotation == "Goblet_MH","Goblet",
+                                                                          ifelse(custom.cell.annotation == "Enterocyte Immature Distal_MH","ID Enterocyte",
+                                                                                 ifelse(custom.cell.annotation == "Transit-Amplifying/Stem/Early Progenitors_MH","TA/Stem",
+                                                                                        ifelse(custom.cell.annotation == "Enterocyte Progenitor Late/Paneth_MH","Enterocyte LP",
+                                                                                               ifelse(custom.cell.annotation == "Enterocyte Mature Proximal_MH","MP Enterocyte",
+                                                                                                      ifelse(custom.cell.annotation =="Enterocyte Mature Distal_MH","MD Enterocyte",
+                                                                                                             ifelse(custom.cell.annotation == "Enterocyte Immature Proximal_MH","IP Enterocyte",
+                                                                                                                    ifelse(custom.cell.annotation == "Enterocyte Distal_MH","D Enterocyte",
+                                                                                                                           ifelse(custom.cell.annotation == "Enterocyte Progenitor Early_MH","Enterocyte EP",
+                                                                                                                                  ifelse(custom.cell.annotation == "Tuft_MH","Tuft",
+                                                                                                                                         ifelse(custom.cell.annotation == "Entero-endocrine_MH","Enteroendocrine",
+                                                                                                                                                ifelse(custom.cell.annotation == "Stromal Cells_MH","Stromal",
+                                                                                                                                                       ifelse(custom.cell.annotation == "CD8+ T cells (IEL)_MH","T cell",
+                                                                                                                                                              ifelse(custom.cell.annotation == "Macrophage_SCSA","Macrophage",
+                                                                                                                                                                     ifelse(custom.cell.annotation == "Erythoid cell_SCSA","Erythroid",
+                                                                                                                                                                            ifelse(custom.cell.annotation == "Tuft_SCSA","Tuft",
+                                                                                                                                                                                   ifelse(custom.cell.annotation == "B cell_SCSA","B cell",
+                                                                                                                                                                                          ifelse(custom.cell.annotation == "Paneth_MH","Paneth",
+                                                                                                                                                                                                 ifelse(custom.cell.annotation == "Mesenchymal Progenitor Cell_SCSA","Mesenchymal Cell",
+                                                                                                                                                                                                        ifelse(custom.cell.annotation == "Stromal_MH","Stromal",
+                                                                                                                                                                                                               ifelse(custom.cell.annotation == "T cell_SCSA","T cell",
+                                                                                                                                                                                                                      ifelse(custom.cell.annotation == "Erythroid cell_SCSA","Erythroid",custom.cell.annotation)))))))))))))))))))))))     
+
+
+# remove cluster Stromal Cells_MH and  CD8+ T cells (IEL)_MH
+combined.all.final <- subset(combined.all.final,subset = custom.cell.annotation %in% c("Goblet_MH","Enterocyte Immature Distal_MH","Transit-Amplifying/Stem/Early Progenitors_MH","Enterocyte Progenitor Late/Paneth_MH","Enterocyte Mature Proximal_MH","Macrophage_SCSA","Enterocyte Mature Distal_MH","Enterocyte Immature Proximal_MH","Enterocyte Distal_MH","Erythoid cell","Tuft_SCSA","Enterocyte Progenitor Early_MH","Tuft_MH","Entero-endocrine_MH","B cell","Paneth_MH","Mesenchymal Progenitor Cell_SCSA","Stromal_MH","T cell_SCSA","T cell","B cell_SCSA","Erythroid cell_SCSA"))
+
+
+#######################################################################
+                                                                      #
+# Version 1                                                           #
+# further modify Tuft cell into Tuft_Epcam+ and Tuft_Epcam+/CD45+     #
+                                                                      #
+#######################################################################
+
+# # extract tuft cells that only positively expressed in epcam gene
+# combined.all.final.tuft <- subset(combined.all.final,custome.cell.annotation.final == "Tuft")
+# # fetch the tuft cells that only positively expressed in epcam but not in cd45 (19 cells)
+# combined.all.final.tuft.epcam.only.cell.ID <- WhichCells(subset(combined.all.final.tuft,subset = Epcam > 0 & Ptprc == 0))
+# # fetch the tuft cells that only positively expressed only in Cd45 or CD45 and Epcam but not in cd45  (492)
+# combined.all.final.tuft.epcam.CD45.cell.ID <- setdiff(WhichCells(combined.all.final.tuft),combined.all.final.tuft.epcam.only.cell.ID)
+
+# # divide the current tuft cells
+# combined.all.final@meta.data <- combined.all.final@meta.data %>%
+#                           mutate(seurat_clusters_updated = as.character(seurat_clusters_updated)) %>%
+#                           mutate(seurat_clusters_updated = ifelse(cell.ID %in% combined.all.final.tuft.epcam.CD45.cell.ID,"26",
+#                                                                   ifelse(cell.ID %in% combined.all.final.tuft.epcam.only.cell.ID, "18",seurat_clusters_updated)) )%>%
+#                           mutate(custome.cell.annotation.split.tuft = ifelse(cell.ID %in% combined.all.final.tuft.epcam.only.cell.ID,"Tuft_Epcam+",ifelse(cell.ID %in% combined.all.final.tuft.epcam.CD45.cell.ID,"Tuft_CD45+/Epcam+",custome.cell.annotation.final)))
+# 
+# View(combined.all.final@meta.data %>% select(seurat_clusters_updated,custome.cell.annotation.split.tuft) %>% filter(custome.cell.annotation.split.tuft == "Tuft_CD45+/Epcam+"))
+
+
+
+#######################################################################
+                                                                      #
+# Version 2                                                           #
+# Do not split Tuft cells                                             #
+                                                                      #
+#######################################################################
+
+combined.all.final@meta.data <- combined.all.final@meta.data %>%
+                          mutate(custome.cell.annotation.split.tuft = custome.cell.annotation.final) %>%
+                          mutate(seurat_clusters_updated = ifelse(seurat_clusters_updated == 22,18,seurat_clusters_updated))
+
+
+# modify sample names
+# “WT naïve”, “WT + FFT”, “Rag2-/-Il2rg-/-“, and “Rag2-/-Il2rg-/-Ifnlr1-/-“
+combined.all.final@meta.data <- combined.all.final@meta.data %>%
+                                mutate(modified.ident = ifelse(modified.ident == "Wtnaive","WT naïve",
+                                                               ifelse(modified.ident == "WTFFT","WT + FFT",
+                                                                      ifelse(modified.ident == "Rag2Il2rg","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))))
+
+
+# extract epcam positive clusters and save as a seurat object (we moved cluster 24<Paneth> and cluster26<Tuft_CD45+/Epcam+> from cd45 to epcam ckyster)
+epcam.final <- subset(combined.all.final,seurat_clusters_updated %in% c("1","2","4","5","8","9","11","12","15","17","21","18","24")) 
+
+CD45.final <- subset(combined.all.final,seurat_clusters_updated %in% c("14","7","3","13","25","0","16","6","10","23"))
+
+dataset.list <- list("epcam" = epcam.final,
+                     "cd45" = CD45.final)
+
+
+
+
+```
+
+
+# cell numbers per dataset
+
+"Rag2-/-Il2rg-/-Ifnlr1-/-"
+"Rag2-/-Il2rg-/-"
+"WT + FFT"
+"WT naïve" 
+```{r}
+
+combined.all.final.wtnaive <- subset(combined.all.final, subset = modified.ident == "WT naïve")
+# 9993 cells
+
+combined.all.final.wtfft <- subset(combined.all.final, subset = modified.ident == "WT + FFT")
+# 12447 cells
+
+combined.all.final.Rag2Il2rg <- subset(combined.all.final, subset = modified.ident == "Rag2-/-Il2rg-/-")
+# 3754 cells
+
+combined.all.final.Rag2Il2rgIfnlr1 <- subset(combined.all.final, subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+# 4714
+
+
+
+epcam.final.wtnaive <- subset(epcam.final, subset = modified.ident == "WT naïve")
+# 5056 cells
+
+epcam.final.wtfft <- subset(epcam.final, subset = modified.ident == "WT + FFT")
+# 5181 cells
+
+epcam.final.Rag2Il2rg <- subset(epcam.final, subset = modified.ident == "Rag2-/-Il2rg-/-")
+# 3475 cells
+
+epcam.final.Rag2Il2rgIfnlr1 <- subset(epcam.final, subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+# 4127 cells
+
+
+
+CD45.final.wtnaive <- subset(CD45.final, subset = modified.ident == "WT naïve")
+# 4937 cells
+
+CD45.final.wtfft <- subset(CD45.final, subset = modified.ident == "WT + FFT")
+# 7266 cells
+
+CD45.final.Rag2Il2rg <- subset(CD45.final, subset = modified.ident == "Rag2-/-Il2rg-/-")
+# 279 cells
+
+CD45.final.Rag2Il2rgIfnlr1 <- subset(CD45.final, subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+# 587 cells
+
+
+
+combined.all.final.T.cell <- subset(combined.all.final,custom.cell.annotation %like% "T cell")
+
+combined.all.final.T.cell.wtnaive <- subset(combined.all.final.T.cell, subset = modified.ident == "WT naïve")
+# 2047 cells
+
+combined.all.final.T.cell.wtfft <- subset(combined.all.final.T.cell, subset = modified.ident == "WT + FFT")
+# 4382 cells
+
+combined.all.final.T.cell.Rag2Il2rg <- subset(combined.all.final.T.cell, subset = modified.ident == "Rag2-/-Il2rg-/-")
+# 0 cells
+
+combined.all.final.T.cell.Rag2Il2rgIfnlr1 <- subset(combined.all.final.T.cell, subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+# 6 cells
+
+
+
+cell.number.table <- data.frame(dataset = c("All","Cd45+","Epcam+","Tcell"),
+                                wtnaive = c(9993,5056,4937,2047),
+                                wtfft = c(12447,5181,7266,4382),
+                                Rag2Il2rg = c(3754,3475,279,0),
+                                Rag2Il2rgIfnlr1 = c(4714,4127,587,6))
+
+write.csv(cell.number.table,"~/scRNA/Harshad/annotation/final_plots_update/cell.number.table.csv")
+
+
+
+
+
+
+```
+
+
+# cell number per cluster
+```{r}
+
+
+unique(combined.all.final.wtnaive@meta.data$custome.cell.annotation.split.tuft)
+unique(combined.all.final.wtfft@meta.data$custome.cell.annotation.split.tuft)
+unique(combined.all.final.Rag2Il2rg@meta.data$custome.cell.annotation.split.tuft)
+unique(combined.all.final.Rag2Il2rgIfnlr1@meta.data$custome.cell.annotation.split.tuft)
+
+str(combined.all.final.wtnaive@meta.data$custome.cell.annotation.split.tuft)
+
+
+
+wtnaive_cellNumber <- combined.all.final.wtnaive@meta.data %>%
+                      data.frame(.) %>%
+                      group_by(custome.cell.annotation.split.tuft) %>%
+                      mutate(cell_number = n()) %>%
+                      distinct(custome.cell.annotation.split.tuft,cell_number) %>%
+                      rename(wtnaive_clusters = custome.cell.annotation.split.tuft)
+
+write.csv(wtnaive_cellNumber,"~/scRNA/Harshad/annotation/final_plots_update/wtnaive_cellNumber_table.csv")
+
+
+wtfft_cellNumber <- combined.all.final.wtfft@meta.data %>%
+                      data.frame(.) %>%
+                      group_by(custome.cell.annotation.split.tuft) %>%
+                      mutate(cell_number = n()) %>%
+                      distinct(custome.cell.annotation.split.tuft,cell_number) %>%
+                      rename(wtfft_clusters = custome.cell.annotation.split.tuft)
+
+write.csv(wtfft_cellNumber,"~/scRNA/Harshad/annotation/final_plots_update/wtfft_cellNumber_table.csv")
+
+
+
+Rag2Il2rg_cellNumber <- combined.all.final.Rag2Il2rg@meta.data %>%
+                      data.frame(.) %>%
+                      group_by(custome.cell.annotation.split.tuft) %>%
+                      mutate(cell_number = n()) %>%
+                      distinct(custome.cell.annotation.split.tuft,cell_number) %>%
+                      rename(Rag2Il2rg_clusters = custome.cell.annotation.split.tuft)
+
+write.csv(Rag2Il2rg_cellNumber,"~/scRNA/Harshad/annotation/final_plots_update/Rag2Il2rg_cellNumber_table.csv")
+
+
+Rag2Il2rgIfnlr1_cellNumber <- combined.all.final.Rag2Il2rgIfnlr1@meta.data %>%
+                      data.frame(.) %>%
+                      group_by(custome.cell.annotation.split.tuft) %>%
+                      mutate(cell_number = n()) %>%
+                      distinct(custome.cell.annotation.split.tuft,cell_number) %>%
+                      rename(Rag2Il2rgIfnlr1_clusters = custome.cell.annotation.split.tuft)
+
+write.csv(Rag2Il2rgIfnlr1_cellNumber,"~/scRNA/Harshad/annotation/final_plots_update/Rag2Il2rgIfnlr1_cellNumber_table.csv")
+
+
+```
+
+
+
+# functions
+```{r}
+
+select_gene_for_all_cluster_old <- function(seurat.all,gene_name,split_Var,plot_title){
+  
+      
+      # get average gene expression values for each cluster
+     Idents(seurat.all) <- "custome.cell.annotation.split.tuft"
+     
+     ave.express.table.all <- AverageExpression(seurat.all)
+     ave.express.table.selected.gene <- data.frame(ave.express.table.all$RNA[gene_name,])
+     colnames(ave.express.table.selected.gene) <- "gene_expression"
+
+     color_max <- max(data.frame(GetAssayData(seurat.all, slot = c("data"))) %>% filter(rownames(.) == gene_name))
+
+     color_min <- min(data.frame(GetAssayData(seurat.all, slot = c("data"))) %>% filter(rownames(.) == gene_name))
+
+      
+      # set up color range
+      #fix.sc <- scale_color_gradientn(colors = c( "#F9F4F4","#0F04F7"),limits = c(color_min,color_max)) 
+     
+     fix.sc <- scale_color_gradientn(colours = rev(magma(5)),limits = c(color_min,color_max))
+      
+
+
+      
+      # per sample
+      feature.plot.perSample <- FeaturePlot(seurat.all, features = gene_name, split.by = split_Var,reduction = "tsne",combine = FALSE,order = TRUE,label = FALSE,repel = TRUE) 
+      
+      feature.plot.perSample.final <- lapply(seq_along(feature.plot.perSample), function(i) {
+    if (i == 1) {
+      feature.plot.perSample[[i]] + fix.sc + ggtitle(plot_title)
+    } else {
+      feature.plot.perSample[[i]] + fix.sc + ggtitle(NULL)
+    }
+  })
+  
+            
+
+      feature.plot.perSample.final <- CombinePlots(feature.plot.perSample.final)
+      #feature.plot.perSample.final <- CombinePlots(lapply(feature.plot.perSample, function (x) x + fix.sc)) + ggtitle(plot_title)
+
+
+  ggarrange(feature.plot.perSample.final) 
+
+
+}
+
+
+
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(viridisLite)
+library(dplyr)
+
+select_gene_for_all_cluster <- function(seurat.all, gene_name, split_Var, plot_title) {
+  
+  Idents(seurat.all) <- "custome.cell.annotation.split.tuft"
+  
+  # Pull data for plotting
+  plot_data <- FetchData(seurat.all, vars = c("tSNE_1", "tSNE_2", split_Var, gene_name))
+  colnames(plot_data) <- c("tSNE_1", "tSNE_2", "split_var", "expr")
+  
+  # Make zeros invisible
+  plot_data$expr[plot_data$expr == 0] <- NA
+  
+  color_min <- min(plot_data$expr, na.rm = TRUE)
+  color_max <- max(plot_data$expr, na.rm = TRUE)
+  
+  # Plot for each split value
+  split_levels <- unique(plot_data$split_var)
+  
+  plot_list <- lapply(seq_along(split_levels), function(i) {
+    subset_data <- plot_data %>% filter(split_var == split_levels[i])
+    
+    g <- ggplot(subset_data, aes(tSNE_1, tSNE_2)) +
+      geom_point(aes(color = expr), size = 0.8) +
+      scale_color_gradientn(
+        colours = rev(magma(5)),
+        limits = c(color_min, color_max),
+        na.value = "transparent"
+      ) +
+      theme_void() +
+      theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)
+      )
+    
+    if (i == 1) {
+      g <- g + ggtitle(plot_title)
+    } else {
+      g <- g + ggtitle(NULL)
+    }
+    
+    g
+  })
+  
+  patchwork::wrap_plots(plot_list)
+}
+
+
+
+
+plot_violin_new <- function(seurat.all,gene_name,split.by,titel_lable,add_stats = TRUE){
+
+      
+      Idents(seurat.all) <- split.by
+      
+      
+        # --- Extract metadata ---
+      meta_data <- seurat.all@meta.data %>%
+      dplyr::select(all_of(split.by))
+      
+      # --- Extract expression data from chosen slot ---
+      expr_matrix <- GetAssayData(seurat.all, assay = "RNA", slot = "data")[gene_name, , drop = FALSE]
+      expr_df <- as.data.frame(t(expr_matrix))
+      expr_df$Cell <- rownames(expr_df)
+      
+      # --- Combine metadata and expression ---
+      plot_data <- cbind(meta_data, expr_df)
+      colnames(plot_data)[1] <- "Group"
+
+      
+      
+      group_counts <- plot_data %>%
+      group_by(Group) %>%
+      summarise(num_cells = n(), .groups = "drop")
+      
+      group_zero_counts <- plot_data %>% 
+        filter(!!as.name(gene_name) > 0) %>%
+        group_by(Group) %>%
+        summarise(num_zero_cells = n(), .groups = "drop")
+      
+      new_labels <- setNames(
+      paste0(group_counts$Group, "\n(n=", group_counts$num_cells, ")","\n(n=", group_zero_counts$num_zero_cells, ")"),
+      group_counts$Group
+    )
+      
+      
+            # per sample
+      violin.perSample <- VlnPlot(object = seurat.all, 
+                          features = gene_name,
+                          split.by = split.by,
+                          pt.size = 0.2,
+                          cols=c("#2787cf", "#d24339", "#F5B041", "#AF7AC5"),
+                          combine = TRUE)  + 
+                          labs(title = titel_lable) +
+      stat_compare_means(
+        method = "wilcox.test",
+        label = "p.signif",
+        hide.ns = FALSE,
+        label.y.npc = 0.98,  # vertical position near top
+        label.x.npc = 0.5    # horizontally centered
+      ) +
+        scale_x_discrete(labels = new_labels)
+      
+      
+
+
+      ggarrange(violin.perSample)
+
+  
+}
+
+
+
+plot_violin <- function(seurat.all,gene_name,titel_lable){
+
+      
+      Idents(seurat.all) <- "custome.cell.annotation.split.tuft"
+      
+
+      
+      # per sample
+      violin.perSample <- VlnPlot(object = seurat.all, 
+                          features = gene_name,
+                          split.by = "modified.ident", 
+                          group.by = "custome.cell.annotation.split.tuft",
+                          pt.size = 0.2,
+                          cols=c("#2787cf", "#d24339", "#F5B041", "#AF7AC5"),
+                          combine = TRUE)  + 
+                          labs(title = titel_lable)
+                          
+
+
+      ggarrange(violin.perSample)
+
+  
+}
+
+
+
+
+plot_violin_stats <- function(
+    seurat.all,
+    gene_name,
+    split.by,
+    titel_lable,
+    add_stats = TRUE,
+    fisher_groups = NULL
+) {
+
+
+  Idents(seurat.all) <- split.by
+
+  # --- Extract metadata and expression data ---
+  meta_data <- seurat.all@meta.data %>%
+    dplyr::select(all_of(split.by))
+
+  expr_matrix <- GetAssayData(seurat.all, assay = "RNA", slot = "data")[gene_name, , drop = FALSE]
+  expr_df <- as.data.frame(t(expr_matrix))
+  colnames(expr_df) <- "Expression"
+  expr_df$Cell <- rownames(expr_df)
+
+  # --- Combine metadata and expression ---
+  plot_data <- cbind(meta_data, expr_df)
+  colnames(plot_data)[1] <- "Group"
+
+  # --- Compute per-group counts ---
+  group_expr_counts <- plot_data %>%
+    mutate(nonzero = Expression > 0) %>%
+    group_by(Group) %>%
+    summarise(
+      total_cells = n(),
+      nonzero_cells = sum(nonzero),
+      zero_cells = sum(!nonzero),
+      .groups = "drop"
+    )
+
+  # --- Prepare x-axis labels ---
+  new_labels <- setNames(
+    paste0(
+      group_expr_counts$Group,
+      "\n(Total Cell#=", group_expr_counts$total_cells, ")\n",
+      "(Nonzero Cell#=", group_expr_counts$nonzero_cells, ")"
+    ),
+    group_expr_counts$Group
+  )
+
+  # --- Make base violin plot ---
+  violin.perSample <- VlnPlot(
+      object = seurat.all,
+      features = gene_name,
+      split.by = split.by,
+      pt.size = 0.2,
+      cols = c("#2787cf", "#d24339", "#F5B041", "#AF7AC5"),
+      combine = TRUE
+    ) +
+    labs(title = titel_lable) +
+    scale_x_discrete(labels = new_labels)
+
+  # --- Manual Wilcoxon test (use first two groups for example) ---
+  wilcox_result <- NULL
+  wilcox_pval <- NA
+  if (add_stats && length(unique(plot_data$Group)) >= 2) {
+    g_levels <- unique(plot_data$Group)
+    groupA <- g_levels[1]
+    groupB <- g_levels[2]
+    xA <- plot_data$Expression[plot_data$Group == groupA]
+    xB <- plot_data$Expression[plot_data$Group == groupB]
+    wilcox_result <- wilcox.test(xA, xB)
+    wilcox_pval <- signif(wilcox_result$p.value, 3)
+    wilcox_color <- ifelse(wilcox_result$p.value < 0.05, "red", "black")
+
+    violin.perSample <- violin.perSample +
+      annotate(
+        "text",
+        x = Inf,
+        y = Inf,
+        label = paste0("wilcox: p = ", wilcox_pval),
+        color = wilcox_color,
+        hjust = 1.1,
+        vjust = 2,   # top-right
+        size = 4
+      )
+  }
+
+  # --- Fisher's exact test ---
+  fisher_result <- NULL
+  fisher_pval <- NA
+  if (!is.null(fisher_groups) && length(fisher_groups) == 2) {
+    groupA <- fisher_groups[1]
+    groupB <- fisher_groups[2]
+
+    if (!(groupA %in% group_expr_counts$Group && groupB %in% group_expr_counts$Group)) {
+      warning("One or both fisher_groups not found in 'Group' column.")
+    } else {
+      subA <- subset(group_expr_counts, Group == groupA)
+      subB <- subset(group_expr_counts, Group == groupB)
+
+      contingency <- matrix(
+        c(subA$nonzero_cells, subA$zero_cells,
+          subB$nonzero_cells, subB$zero_cells),
+        nrow = 2,
+        byrow = TRUE,
+        dimnames = list(c(groupA, groupB), c("nonzero", "zero"))
+      )
+
+      print("Contingency table for Fisher’s exact test:")
+      print(contingency)
+
+      fisher_result <- fisher.test(contingency)
+      fisher_pval <- signif(fisher_result$p.value, 3)
+      fisher_color <- ifelse(fisher_result$p.value < 0.05, "red", "black")
+
+      violin.perSample <- violin.perSample +
+        annotate(
+          "text",
+          x = Inf,
+          y = Inf,
+          label = paste0("fisher: p = ", fisher_pval),
+          color = fisher_color,
+          hjust = 1.1,
+          vjust = 4.5,  # slightly below Wilcoxon
+          size = 4
+        )
+    }
+  }
+
+  return(list(
+    plot = ggarrange(violin.perSample),
+    wilcox_result = wilcox_result,
+    fisher_result = fisher_result,
+    counts = group_expr_counts
+  ))
+}
+
+
+
+
+plot_gene_boxplot <- function(seurat.obj, gene_names, metadata_var,
+                              assay = "RNA", slot = "data",
+                              filter_zeros = TRUE,
+                              add_stats = TRUE,
+                              exp_transform = TRUE) {
+  
+  # --- Check inputs ---
+  if (!metadata_var %in% colnames(seurat.obj@meta.data)) {
+    stop(paste0("'", metadata_var, "' not found in metadata."))
+  }
+  if (!all(gene_names %in% rownames(seurat.obj[[assay]]))) {
+    stop("Some genes not found in the specified assay.")
+  }
+  
+  # --- Extract metadata ---
+  meta_data <- seurat.obj@meta.data %>%
+    dplyr::select(all_of(metadata_var))
+  
+  # --- Extract expression data from chosen slot ---
+  expr_matrix <- GetAssayData(seurat.obj, assay = assay, slot = slot)[gene_names, , drop = FALSE]
+  expr_df <- as.data.frame(t(expr_matrix))
+  expr_df$Cell <- rownames(expr_df)
+  
+  # --- Combine metadata and expression ---
+  plot_data <- cbind(meta_data, expr_df)
+  colnames(plot_data)[1] <- "Group"
+  
+  # --- Reshape for multiple genes ---
+  if (length(gene_names) > 1) {
+    plot_data <- pivot_longer(plot_data, cols = all_of(gene_names),
+                              names_to = "Gene", values_to = "Expression")
+  } else {
+    plot_data$Gene <- gene_names
+    colnames(plot_data)[2] <- "Expression"
+  }
+  
+  plot_data$Group <- as.factor(plot_data$Group)
+  
+  # --- Transform from log1p to linear scale if slot == "data" ---
+  if (exp_transform && slot == "data") {
+    plot_data$Expression <- expm1(plot_data$Expression)
+  }
+  
+  # --- Optionally remove zeros ---
+  if (filter_zeros) {
+    plot_data <- plot_data %>% filter(Expression > 0)
+  }
+  
+  # --- Compute non-zero cell counts per group ---
+  group_counts <- plot_data %>%
+    group_by(Group) %>%
+    summarise(nonzero_cells = n(), .groups = "drop")
+  
+  # --- Modify group labels to include counts ---
+  new_labels <- setNames(
+    paste0(group_counts$Group, "\n(n=", group_counts$nonzero_cells, ")"),
+    group_counts$Group
+  )
+  
+  # --- Plot setup ---
+  p <- ggplot(plot_data, aes(x = Group, y = Expression, fill = Group)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.5, color = "black") +
+    geom_quasirandom(
+      aes(color = Group),
+      width = 0.25,
+      size = 0.7,
+      alpha = 0.5,
+      dodge.width = 0.75,
+      varwidth = TRUE,
+      show.legend = FALSE
+    ) +
+    theme_classic(base_size = 14) +
+    labs(
+      x = metadata_var,
+      y = "Expression",
+      title = paste("Expression of", paste(gene_names, collapse = ", ")),
+      fill = metadata_var
+    ) +
+    scale_fill_brewer(palette = "Set2") +
+    scale_color_brewer(palette = "Set2") +
+    scale_x_discrete(labels = new_labels) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.15)))  # add a little extra space for stats
+  
+  # --- Add significance test (centered top) ---
+  if (add_stats && length(unique(plot_data$Group)) == 2) {
+    p <- p +
+      stat_compare_means(
+        method = "wilcox.test",
+        label = "p.signif",
+        hide.ns = FALSE,
+        label.y.npc = 0.98,  # vertical position near top
+        label.x.npc = 0.5    # horizontally centered
+      )
+  }
+  
+  # --- Facet for multiple genes ---
+  if (length(gene_names) > 1) {
+    p <- p + facet_wrap(~Gene, scales = "free_y")
+  }
+  
+  return(p)
+}
+
+```
+
+
+# Ifnl2 and Ifnl3 combine (add gene expression values together)
+```{r}
+
+# # add gene expression values of Ifnl2 and Ifnl3 together
+# epcam.final.Ifnl2.Ifnl3 <- epcam.final
+# Ifnl2.Ifnl3 <- epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] +epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl3",]
+# Ifnl2.Ifnl3 <- rbind(epcam.final.Ifnl2.Ifnl3@assays$RNA@data,Ifnl2.Ifnl3)
+# epcam.final.Ifnl2.Ifnl3@assays$RNA@data <- Ifnl2.Ifnl3
+# 
+# 
+# epcam.final.Ifnl2.Ifnl3@meta.data$modified.ident <-  factor(epcam.final.Ifnl2.Ifnl3@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+# 
+# gene_expression_ifnl2.ifnl3 <- select_gene_for_all_cluster(epcam.final.Ifnl2.Ifnl3,"Ifnl2.Ifnl3")
+# ggsave(plot = gene_expression_ifnl2.ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/ifnl2.ifnl3_gene_expression.svg",width = 12, height = 10, dpi = 600)
+# 
+# epcam.final.Ifnl2.Ifnl3.violin <- epcam.final
+# epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl2",] <- epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl2",] + epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl3",]
+# 
+# 
+# epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl2",]
+# epcam.final@assays$RNA@data["Ifnl2",]
+# 
+# # check if everything is right
+# cbind(epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl2",],epcam.final@assays$RNA@data["Ifnl2",],epcam.final@assays$RNA@data["Ifnl3",])
+
+epcam.final.Ifnl2.Ifnl3 <- subset(epcam.final,subset = modified.ident %in% c("WT + FFT","WT naïve"))
+epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] <- epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] + epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl3",]
+epcam.final.Ifnl2.Ifnl3@meta.data$modified.ident <- factor(epcam.final.Ifnl2.Ifnl3@meta.data$modified.ident,levels = c("WT naïve","WT + FFT"))
+epcam.final.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft <- factor(epcam.final.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft,levels = c("TA/Stem","Enterocyte EP","Enterocyte LP","IP Enterocyte","ID Enterocyte","MP Enterocyte","MD Enterocyte","D Enterocyte","Enteroendocrine","Goblet","Paneth","Tuft","Stromal"))
+
+# violin plot
+violin_Ifnl2.Ifnl3 <- plot_violin(epcam.final.Ifnl2.Ifnl3,"Ifnl2")
+ggsave(plot = violin_Ifnl2.Ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+epcam.final.Ifnl2.Ifnl3.expression <- epcam.final
+epcam.final.Ifnl2.Ifnl3.expression@assays$RNA@data["Ifnl2",] <- epcam.final.Ifnl2.Ifnl3.expression@assays$RNA@data["Ifnl2",] + epcam.final.Ifnl2.Ifnl3.expression@assays$RNA@data["Ifnl3",]
+epcam.final.Ifnl2.Ifnl3.expression@meta.data$modified.ident <- factor(epcam.final.Ifnl2.Ifnl3.expression@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+epcam.final.Ifnl2.Ifnl3.expression@meta.data$custome.cell.annotation.split.tuft <- factor(epcam.final.Ifnl2.Ifnl3.expression@meta.data$custome.cell.annotation.split.tuft,levels = c("TA/Stem","Enterocyte EP","Enterocyte LP","IP Enterocyte","ID Enterocyte","MP Enterocyte","MD Enterocyte","D Enterocyte","Enteroendocrine","Goblet","Paneth","Tuft","Stromal"))
+
+
+
+# gene expression plot
+gene_expression_ifnl2.ifnl3 <- select_gene_for_all_cluster(epcam.final.Ifnl2.Ifnl3.expression,"Ifnl2")
+
+ggsave(plot = gene_expression_ifnl2.ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.Ifnl3_expression_new.svg",width = 12, height = 10, dpi = 600)
+
+
+
+```
+
+
+
+# create a new seurat object and with stl1 and stl5 combined, ifnl2 and ifnl3 combined
+# only extract the cells that ifnl2+ifnl3 are non_0
+# then do correlation plot
+```{r}
+
+# create a new seurat object
+epcam.final.stl1.stl5.ifnl2.ifnl3 <- subset(epcam.final,subset = modified.ident %in% c("WT + FFT"))
+
+# combine stl1 and stl5
+epcam.final.stl1.stl5.ifnl2.ifnl3@assays$RNA@data["Murine-astrovirus-STL1",] <- epcam.final.stl1.stl5.ifnl2.ifnl3@assays$RNA@data["Murine-astrovirus-STL1",] + epcam.final.stl1.stl5.ifnl2.ifnl3@assays$RNA@data["Murine-astrovirus-STL5",]
+
+# combine ifnl2 and ifnl3
+epcam.final.stl1.stl5.ifnl2.ifnl3@assays$RNA@data["Ifnl2",] <- epcam.final.stl1.stl5.ifnl2.ifnl3@assays$RNA@data["Ifnl2",] + epcam.final.stl1.stl5.ifnl2.ifnl3@assays$RNA@data["Ifnl3",]
+
+# filter out cells that has ifln2 + ifnl3 = 0
+epcam.final.stl1.stl5.ifnl2.ifnl3.non0 <- subset(epcam.final.stl1.stl5.ifnl2.ifnl3,subset = Ifnl2 > 0)
+# 18 cells left
+
+
+# do correlation
+## prepare the table
+stl1.stl5.ifnl2.ifnl3.count <- epcam.final.stl1.stl5.ifnl2.ifnl3.non0@assays$RNA@data %>%
+             data.frame(.) %>%
+             filter(rownames(.) %in% c("Murine-astrovirus-STL1","Ifnl2")) %>% 
+             t(.) %>%
+             data.frame(.)
+
+
+## linear model
+stl1.stl5.ifnl2.ifnl3.model <- lm(Murine.astrovirus.STL1~ Ifnl2, data=stl1.stl5.ifnl2.ifnl3.count)
+summary(stl1.stl5.ifnl2.ifnl3.model)
+# Call:
+# lm(formula = Murine.astrovirus.STL1 ~ Ifnl2, data = stl1.stl5.ifnl2.ifnl3.count)
+# 
+# Residuals:
+#    Min     1Q Median     3Q    Max 
+# -6.078 -3.695 -2.903  3.751 10.867 
+# 
+# Coefficients:
+#             Estimate Std. Error t value Pr(>|t|)
+# (Intercept)   3.7358     2.2458   1.663    0.116
+# Ifnl2         0.8872     1.3144   0.675    0.509
+# 
+# Residual standard error: 5.302 on 16 degrees of freedom
+# Multiple R-squared:  0.02768,	Adjusted R-squared:  -0.03309 
+# F-statistic: 0.4556 on 1 and 16 DF,  p-value: 0.5093
+
+
+# ggplot
+stl1.stl5.ifnl2.ifnl3.plot <- ggplot(stl1.stl5.ifnl2.ifnl3.count,aes(Ifnl2, Murine.astrovirus.STL1)) +
+                      geom_point() +
+                      geom_smooth(method='lm') +
+                      labs(x = "Ifnl2.Ifnl3",y = "STL1.STL5") +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+
+ggsave(plot=stl1.stl5.ifnl2.ifnl3.plot,file="~/scRNA/Harshad/annotation/final_plots_update/Stl1.Stl5.Ifnl2.Ifnl3_final_lm.svg",width = 7, height = 5, dpi = 600)
+
+
+```
+
+
+
+# tsne plots
+```{r}
+
+combined.all.final@meta.data$modified.ident <-  factor(combined.all.final@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+
+dataset.list[["epcam"]]@meta.data$modified.ident <-  factor(dataset.list[["epcam"]]@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+
+dataset.list[["cd45"]]@meta.data$modified.ident <-  factor(dataset.list[["cd45"]]@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+
+# tsne plot by clusters
+p.all.noAnnotation.tsne <- DimPlot(combined.all.final, reduction = "tsne",group.by = "custome.cell.annotation.split.tuft",label = FALSE,repel = FALSE) +
+  theme(legend.position = "bottom") +
+  labs(title = "")  +
+  #scale_color_manual(values = color.cluster.name) #+
+  guides(col = guide_legend(ncol=5,override.aes = list(size = 3)))
+
+
+
+# tsne plot by clusters per sample
+p.per.sample.noAnnotation.tsne <- DimPlot(combined.all.final, reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = FALSE,repel = FALSE) +
+theme(legend.position = "bottom") +
+labs(title = "")  #+
+guides(col = guide_legend(ncol=5,override.aes = list(size = 3)))
+
+
+ggsave(plot = ggarrange(p.all.noAnnotation.tsne,p.per.sample.noAnnotation.tsne,common.legend = TRUE,legend = "bottom",widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/All_Clusters_final_tSNE_noAnnotation.svg",width = 18, height = 6, dpi = 600)
+
+
+# entire dataset with annotation
+
+# tsne plot by clusters
+p.all.withAnnotation.tsne <- DimPlot(combined.all.final, reduction = "tsne",group.by = "custome.cell.annotation.split.tuft",label = TRUE,repel = TRUE) +
+  theme(legend.position = "none") +
+  labs(title = "")
+
+
+# tsne plot by clusters per sample
+p.per.sample.withAnnotation.tsne <- DimPlot(combined.all.final, reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = TRUE,repel = TRUE) +
+theme(legend.position = "none") +
+labs(title = "")
+
+
+ggsave(plot = ggarrange(p.all.withAnnotation.tsne,p.per.sample.withAnnotation.tsne,legend.common = TRUE,widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/All_Clusters_final_tSNE_withAnnotation.svg",width = 18, height = 9, dpi = 600)
+
+
+#################################################################################################################################################
+
+# CD45 positive no annotation
+p.cd45.all.noAnnotation.tsne <- DimPlot(dataset.list[["cd45"]], reduction = "tsne",group.by = "custome.cell.annotation.split.tuft",label = FALSE,repel = FALSE) +
+theme(legend.position = "bottom") +
+labs(title = "")
+
+# ggsave(plot = p.cd45.all.noAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/CD45_Positive_Clusters_all_tSNE_noAnnotation.svg",width = 10, height = 10, dpi = 600)
+
+p.cd45.perSample.noAnnotation.tsne <- DimPlot(dataset.list[["cd45"]], reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = FALSE,repel = TRUE) +
+theme(legend.position = "bottom") +
+labs(title = "")
+
+# ggsave(plot = p.cd45.perSample.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/CD45_Positive_Clusters_perSample_tSNE_noAnnotation.svg",width = 10, height = 10, dpi = 600)
+
+ggsave(plot = ggarrange(p.cd45.all.noAnnotation.tsne,p.cd45.perSample.noAnnotation.tsne,common.legend = TRUE,legend = "bottom",widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/CD45_Positive_Clusters_final_tSNE_noAnnotation.svg",width = 18, height = 5, dpi = 60)
+
+
+# CD45 positive with annotation
+p.cd45.all.withAnnotation.tsne <- DimPlot(dataset.list[["cd45"]], reduction = "tsne",group.by = "custome.cell.annotation.split.tuft",label = TRUE,repel = TRUE) +
+theme(legend.position = "none") +
+labs(title = "")
+
+# ggsave(plot = p.cd45.all.withAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/cd45.all.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+
+p.cd45.perSample.withAnnotation.tsne <- DimPlot(dataset.list[["cd45"]], reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = TRUE,repel = TRUE) +
+theme(legend.position = "none") +
+labs(title = "")
+
+# ggsave(plot = p.cd45.perSample.withAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/cd45.perSample.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+
+ggsave(plot = ggarrange(p.cd45.all.withAnnotation.tsne,p.cd45.perSample.withAnnotation.tsne,widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/CD45_Positive_Clusters_final_tSNE_withAnnotation.svg",width = 18, height = 5, dpi = 600)
+
+
+
+##########################################################################################################################################################
+
+
+
+# EPCAM positive no annotation
+p.epcam.all.noAnnotation.tsne <- DimPlot(dataset.list[["epcam"]], reduction = "tsne",group.by = "custome.cell.annotation.split.tuft",label = FALSE,repel = FALSE) +
+theme(legend.position = "bottom") +
+labs(title = "")
+
+# ggsave(plot = p.epcam.all.noAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/epcam.all.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+
+
+p.epcam.perSample.noAnnotation.tsne <- DimPlot(dataset.list[["epcam"]], reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = FALSE,repel = FALSE) +
+theme(legend.position = "bottom") +
+labs(title = "")
+
+# ggsave(plot = p.epcam.perSample.noAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/epcam.perSample.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+
+ggsave(plot = ggarrange(p.epcam.all.noAnnotation.tsne,p.epcam.perSample.noAnnotation.tsne,common.lengend = TRUE,widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/EPCAM_Positive_Clusters_final_tSNE_noAnnotation.svg",width = 15, height = 10, dpi = 600)
+
+
+
+# EPCAM positive with annotation
+p.epcam.all.withAnnotation.tsne <- DimPlot(dataset.list[["epcam"]], reduction = "tsne",group.by = "custome.cell.annotation.split.tuft",label = TRUE,repel = TRUE) +
+theme(legend.position = "none") +
+labs(title = "")
+
+# ggsave(plot = p.epcam.all.withAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/epcam.all.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+
+
+p.epcam.perSample.withAnnotation.tsne <- DimPlot(dataset.list[["epcam"]], reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = TRUE,repel = TRUE) +
+theme(legend.position = "none") +
+labs(title = "")
+
+# ggsave(plot = p.epcam.perSample.noAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/epcam.perSample.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+
+ggsave(plot = ggarrange(p.epcam.all.withAnnotation.tsne,p.epcam.perSample.withAnnotation.tsne,widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/EPCAM_Positive_Clusters_final_tSNE_withAnnotation.svg",width = 15, height = 4, dpi = 600)
+
+```
+
+
+# gene expression plots
+```{r}
+
+
+dataset.list[["epcam"]]@meta.data$modified.ident <-  factor(dataset.list[["epcam"]]@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+
+# make gene expression plots for genes Murine-astrovirus-STL1/Murine-astrovirus-STL5/ifnl2/ifnl3/ifit1/ifnb/ifna5/ifnlr1/IFIH1/
+# harshad: IFNa1, IFNa4 and IFNa11 (these genes are not found in this dataset)
+gene_expression_stl1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Murine-astrovirus-STL1")
+ggsave(plot = gene_expression_stl1,file = "~/scRNA/Harshad/annotation/final_plots_update/STL1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+gene_expression_stl5 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Murine-astrovirus-STL5")
+ggsave(plot = gene_expression_stl5,file = "~/scRNA/Harshad/annotation/final_plots_update/STL5_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+gene_expression_ifnl2 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifnl2")
+ggsave(plot = gene_expression_ifnl2,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+gene_expression_ifnl3 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifnl3")
+ggsave(plot = gene_expression_ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl3_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+gene_expression_ifit1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifit1")
+ggsave(plot = gene_expression_ifit1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+# there is no ifnb but only ifnb1 (here)
+gene_expression_ifnb1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifnb1")
+ggsave(plot = gene_expression_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+combined.all.final.WTNaive.WTFFT <- subset(combined.all.final,subset = modified.ident %in% c("WT + FFT","WT naïve"))
+gene_expression_ifnb1_epcam_cd45 <- select_gene_for_all_cluster(combined.all.final,"Ifnb1")
+ggsave(plot = gene_expression_ifnb1_epcam_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_gene_expression_epcam_cd45.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifnb1_epcam_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_gene_expression_epcam_cd45.pdf",width = 12, height = 10, dpi = 600)
+
+
+# there is no ifna5
+# gene_expression_ifna5 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifna5")
+# ggsave(plot = gene_expression_ifna5,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifna5_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+gene_expression_ifih1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifih1")
+ggsave(plot = gene_expression_ifih1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifih1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+gene_expression_ifnlr1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifnlr1")
+ggsave(plot = gene_expression_ifnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+
+gene_expression_Ddx58 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ddx58")
+ggsave(plot = gene_expression_Ddx58,file = "~/scRNA/Harshad/annotation/final_plots_update/Ddx58_gene_expression.svg",width = 12, height = 10, dpi = 600)
+
+
+
+########## for all clusters #########
+
+
+
+gene_expression_stl1_allClusters <- select_gene_for_all_cluster(combined.all.final,"Murine-astrovirus-STL1")
+ggsave(plot = gene_expression_stl1_allClusters,file = "~/scRNA/Harshad/annotation/final_plots_update/STL1_gene_expression_allClusters.svg",width = 12, height = 10, dpi = 600)
+
+
+gene_expression_stl5_allClusters <- select_gene_for_all_cluster(combined.all.final,"Murine-astrovirus-STL5")
+ggsave(plot = gene_expression_stl5_allClusters,file = "~/scRNA/Harshad/annotation/final_plots_update/STL5_gene_expression_allClusters.svg",width = 12, height = 10, dpi = 600)
+
+```
+
+
+# violin plots for WTNaive and WTFFT samples
+```{r}
+
+#violin plots for WTFFT AND WTNAIVE: #Murine-astrovirus-STL1/Murine-astrovirus-STL5/ifnl2/ifnl3/ifit1/ifnb/ifna5/ifnlr1/IFIH1
+# TA/Stem; Enterocyte EP; Enterocyte LP; IP Enterocyte; ID Enterocyte; MP Enterocyte; MD Enterocyte; D Enterocyte; Enteroendocrine; Goblet; Paneth, Tuft; Stromal
+
+
+
+# “TA/Stem”, then “Enterocyte EP”, then “Enterocyte LP”, then “IP Enterocyte”, then “ID Enterocyte”, then “MD Enterocyte”, then “MP Enterocyte”, then “D Enterocyte”, then “Goblet”, then “Enteroendocrine”, then “Paneth”, then “Tuft”
+
+seurat <- subset(dataset.list[["epcam"]],subset = modified.ident %in% c("WT + FFT","WT naïve"))
+seurat@meta.data$modified.ident <- droplevels(seurat@meta.data$modified.ident)
+seurat@meta.data$custome.cell.annotation.split.tuft <- factor(seurat@meta.data$custome.cell.annotation.split.tuft,levels = c("TA/Stem","Enterocyte EP","Enterocyte LP","IP Enterocyte","ID Enterocyte","MD Enterocyte","MP Enterocyte","D Enterocyte","Goblet","Enteroendocrine","Paneth","Tuft","Stromal"))
+
+seurat@meta.data$modified.ident <- factor(seurat@meta.data$modified.ident,levels = c("WT naïve","WT + FFT"))
+
+
+violin_stl1 <- plot_violin(seurat,"Murine-astrovirus-STL1")
+ggsave(plot = violin_stl1,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_stl5 <- plot_violin(seurat,"Murine-astrovirus-STL5")
+ggsave(plot = violin_stl5,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_ifnl2 <- plot_violin(seurat,"Ifnl2")
+ggsave(plot = violin_ifnl2,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_ifnl3 <- plot_violin(seurat,"Ifnl3")
+ggsave(plot = violin_ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
+
+violin_ifit1 <- plot_violin(seurat,"Ifit1")
+ggsave(plot = violin_ifit1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_violin.svg",width = 12, height = 5, dpi = 600)
+
+violin_ifnb1 <- plot_violin(seurat,"Ifnb1")
+ggsave(plot = violin_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
+
+combined.all.final.WTNaive.WTFFT <- subset(combined.all.final,subset = modified.ident %in% c("WT + FFT","WT naïve"))
+violin_ifnb1_epcam_cd45 <- plot_violin(combined.all.final.WTNaive.WTFFT,"Ifnb1")
+ggsave(plot = violin_ifnb1_epcam_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_ifnb1_epcam_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+combined.all.final.allSample <- combined.all.final
+violin_ifnb1_epcam_cd45_allSample <- plot_violin(combined.all.final.allSample,"Ifnb1")
+ggsave(plot = violin_ifnb1_epcam_cd45_allSample,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_ifnb1_epcam_cd45_allSamples.pdf",width = 12, height = 5, dpi = 600)
+
+# there is no Ifna5
+# violin_ifna5 <- plot_violin(seurat,"Ifna5")
+# ggsave(plot = violin_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+# ifnlr1/IFIH1
+violin_ifnlr1 <- plot_violin(seurat,"Ifnlr1")
+ggsave(plot = violin_ifnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_Ifih1 <- plot_violin(seurat,"Ifih1")
+ggsave(plot = violin_Ifih1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifih1_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_Ddx58 <- plot_violin(seurat,"Ddx58")
+ggsave(plot = violin_Ddx58,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_Ddx58.svg",width = 12, height = 5, dpi = 600)
+
+
+```
+
+
+# violin plots for all samples (Figure 2)
+```{r}
+
+seurat.all <- dataset.list[["epcam"]]
+seurat.all@meta.data$custome.cell.annotation.split.tuft <- factor(seurat.all@meta.data$custome.cell.annotation.split.tuft,levels = c("TA/Stem","Enterocyte EP","Enterocyte LP","IP Enterocyte","ID Enterocyte","MD Enterocyte","MP Enterocyte","D Enterocyte","Goblet","Enteroendocrine","Paneth","Tuft","Stromal"))
+
+seurat.all@meta.data$modified.ident <- factor(seurat.all@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+
+
+violin_stl1_4samples <- plot_violin(seurat.all,"Murine-astrovirus-STL1")
+ggsave(plot = violin_stl1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+
+
+violin_stl1_4samples_allCluster <- plot_violin(combined.all.final,"Murine-astrovirus-STL1")
+ggsave(plot = violin_stl1_4samples_allCluster,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1_violin_4samples_allClusters.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_stl5_4samples <- plot_violin(seurat.all,"Murine-astrovirus-STL5")
+ggsave(plot = violin_stl5_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_stl5_4samples_allCluster <- plot_violin(combined.all.final,"Murine-astrovirus-STL5")
+ggsave(plot = violin_stl5_4samples_allCluster,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5_violin_4samples_allClusters.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_ifnl2_4samples <- plot_violin(seurat.all,"Ifnl2")
+ggsave(plot = violin_ifnl2_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_ifnl3_4samples <- plot_violin(seurat.all,"Ifnl3")
+ggsave(plot = violin_ifnl3_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl3_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+violin_ifit1_4samples <- plot_violin(seurat.all,"Ifit1")
+ggsave(plot = violin_ifit1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+violin_Stat1_4samples <- plot_violin(seurat.all,"Stat1")
+ggsave(plot = violin_Stat1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Stat1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+violin_Oas1a_4samples <- plot_violin(seurat.all,"Oas1a")
+ggsave(plot = violin_Oas1a_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Oas1a_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+violin_Isg15_4samples <- plot_violin(seurat.all,"Isg15")
+ggsave(plot = violin_Isg15_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
+
+
+violin_ifnb1_4samples <- plot_violin(seurat.all,"Ifnb1")
+ggsave(plot = violin_ifnb1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+# there is no Ifna5
+# violin_ifna5 <- plot_violin(seurat,"Ifna5")
+# ggsave(plot = violin_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+# ifnlr1/IFIH1
+violin_ifnlr1_4samples <- plot_violin(seurat.all,"Ifnlr1")
+ggsave(plot = violin_ifnlr1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_Ifih1_4samples <- plot_violin(seurat.all,"Ifih1")
+ggsave(plot = violin_Ifih1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifih1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_Ddx58_4samples <- plot_violin(seurat.all,"Ddx58")
+ggsave(plot = violin_Ddx58_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_Ddx58_4samples.svg",width = 12, height = 5, dpi = 600)
+
+
+
+
+# Muc2
+violin_Muc2_4samples <- plot_violin(seurat.all,"Muc2","Muc2")
+ggsave(plot = violin_Muc2_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_Muc2_4samples.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Fcgbp
+violin_Fcgbp_4samples <- plot_violin(seurat.all,"Fcgbp","Fcgbp")
+ggsave(plot = violin_Fcgbp_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Fcgbp_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
+
+
+
+# Clca1
+violin_Clca1_4samples <- plot_violin(seurat.all,"Clca1","Clca1")
+ggsave(plot = violin_Clca1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Clca1_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Zg16
+violin_Zg16_4samples <- plot_violin(seurat.all,"Zg16","Zg16")
+ggsave(plot = violin_Zg16_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Zg16_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
+
+
+
+
+
+
+seurat.all.Ifnl2.Ifnl3 <- seurat.all
+seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] <- seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] + seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl3",]
+seurat.all.Ifnl2.Ifnl3@meta.data$modified.ident <- factor(seurat.all.Ifnl2.Ifnl3@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/- ","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft <- factor(seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft,levels = c("TA/Stem","Enterocyte EP","Enterocyte LP","IP Enterocyte","ID Enterocyte","MP Enterocyte","MD Enterocyte","D Enterocyte","Enteroendocrine","Goblet","Paneth","Tuft","Stromal"))
+
+
+violin_ifnl2.ifnl3_4samples <- plot_violin(seurat.all.Ifnl2.Ifnl3,"Ifnl2")
+ggsave(plot = violin_ifnl2.ifnl3_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/ifnl2.ifnl3_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+
+# violin_Ifnb1_4samples <- plot_violin(seurat.all,"Ifnb1")
+# ggsave(plot = violin_Ifnb1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+
+rownames(seurat.all)[rownames(seurat.all) %like% "Ifnb1"]
+
+sum(seurat.all@assays$RNA@data["Ifnb1",])
+
+rownames(seurat.all)[rownames(seurat.all) %like% "Ifna1"]
+
+rownames(seurat.all)[rownames(seurat.all) %like% "Ifna4"]
+
+
+```
+
+
+Per reviewers
+In Fig 2, Can we compare WT vs WT+FFT and Rag2Il2rg vs Rag2Il2rgIfnlr1 for statistical analysis? The reviewer wants to see if the gene expression across these comparison groups are significantly different.
+```{r}
+
+seurat.all <- dataset.list[["epcam"]]
+# combine WT naïve","WT + FFT and combine Rag2-/-Il2rg-/-, Rag2-/-Il2rg-/-Ifnlr1-/-
+seurat.all$combined.ident <- ifelse(seurat.all$modified.ident %in% c("WT naïve","WT + FFT"),"WTnaïve \nWTFFT","Rag2-/-Il2rg-/- \nRag2-/-Il2rg-/-Ifnlr1-/-")
+seurat.all@meta.data$combined.ident <- factor(seurat.all@meta.data$combined.ident,levels = c("WTnaïve \nWTFFT","Rag2-/-Il2rg-/- \nRag2-/-Il2rg-/-Ifnlr1-/-"))
+seurat.all.Ifnl2.Ifnl3 <- seurat.all
+seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] <- seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] + seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl3",]
+seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft <- factor(seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft,levels = c("TA/Stem","Enterocyte EP","Enterocyte LP","IP Enterocyte","ID Enterocyte","MP Enterocyte","MD Enterocyte","D Enterocyte","Enteroendocrine","Goblet","Paneth","Tuft","Stromal"))
+
+Idents(seurat.all.Ifnl2.Ifnl3) <- "modified.ident"
+
+unique(seurat.all.Ifnl2.Ifnl3$modified.ident)
+
+# DE analysis between WT vs WT+FFT
+DE_WT_vs_WTFFT <- FindMarkers(
+  object = seurat.all.Ifnl2.Ifnl3,
+  ident.1 = "WT + FFT",
+  ident.2 = "WT naïve",
+  logfc.threshold = 0,   # include all genes (set to 0.25 to filter)
+  min.pct = 0,         # only test genes expressed in at least 10% of cells
+  test.use = "wilcox"    # Wilcoxon rank-sum test (default)
+)
+
+DE_WT_vs_WTFFT.stats <- DE_WT_vs_WTFFT %>% filter(rownames(.) %in% c("Ifnl2","Ifnlr1","Ifit1","Isg15"))
+write.csv(DE_WT_vs_WTFFT.stats,"~/scRNA/Harshad/annotation/final_plots_update/DE_WT_vs_WTFFT.stats.csv")
+
+
+# DE analysis between WT vs WT+FFT
+DE_Rag2Il2rgIfnlr1_Rag2Il2rg <- FindMarkers(
+  object = seurat.all.Ifnl2.Ifnl3,
+  ident.1 = "Rag2-/-Il2rg-/-Ifnlr1-/-",
+  ident.2 = "Rag2-/-Il2rg-/-",
+  logfc.threshold = 0,   # include all genes (set to 0.25 to filter)
+  min.pct = 0,         # only test genes expressed in at least 10% of cells
+  test.use = "wilcox"    # Wilcoxon rank-sum test (default)
+)
+
+DE_Rag2Il2rgIfnlr1_Rag2Il2rg.stats <- DE_Rag2Il2rgIfnlr1_Rag2Il2rg %>% filter(rownames(.) %in% c("Ifnl2","Ifnlr1","Ifit1","Isg15"))
+write.csv(DE_Rag2Il2rgIfnlr1_Rag2Il2rg.stats,"~/scRNA/Harshad/annotation/final_plots_update/DE_Rag2Il2rgIfnlr1_Rag2Il2rg.stats.csv")
+
+
+
+# Ifnl2.Ifnl3
+violin_ifnl2.ifnl3_Combinedsamples <- plot_violin(seurat.all.Ifnl2.Ifnl3,"Ifnl2","Ifnl2.Ifnl3")
+ggsave(plot = violin_ifnl2.ifnl3_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/ifnl2.ifnl3_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 100)
+
+# Ifnlr1
+violin_ifnlr1_Combinedsamples <- plot_violin(seurat.all,"Ifnlr1","Ifnlr1")
+ggsave(plot = violin_ifnlr1_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+
+# Ifit1
+violin_ifit1_Combinedsamples <- plot_violin(seurat.all,"Ifit1","Ifit1")
+ggsave(plot = violin_ifit1_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Isg15
+violin_Isg15_Combinedsamples <- plot_violin(seurat.all,"Isg15","Isg15")
+ggsave(plot = violin_Isg15_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Muc2
+violin_Muc2_Combinedsamples <- plot_violin(seurat.all,"Muc2","Muc2")
+ggsave(plot = violin_Muc2_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Muc2_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Fcgbp
+violin_Fcgbp_Combinedsamples <- plot_violin(seurat.all,"Fcgbp","Fcgbp")
+ggsave(plot = violin_Fcgbp_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Fcgbp_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+
+
+
+# Clca1
+violin_Clca1_Combinedsamples <- plot_violin(seurat.all,"Clca1","Clca1")
+ggsave(plot = violin_Clca1_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Clca1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Zg16
+violin_Zg16_Combinedsamples <- plot_violin(seurat.all,"Zg16","Zg16")
+ggsave(plot = violin_Zg16_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Zg16_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+
+
+```
+
+
+
+Per reviewers
+For supplementary fig 1B, can you separate all the cells as muAstV positive cells vs negative cells and then look at Ifit1, Isg15 and Ifnl2/3 expression. We want to check if infected vs uninfected cells show any differences in interferon related genes.
+```{r}
+
+seurat.all$Astrovirus1_expression <- ifelse(
+  seurat.all[["RNA"]]@data["Murine-astrovirus-STL1", ] > 0,
+  "Astrovirus_Pos",
+  "Astrovirus_Neg"
+)
+
+
+seurat.all$Astrovirus5_expression <- ifelse(
+  seurat.all[["RNA"]]@data["Murine-astrovirus-STL5", ] > 0,
+  "Astrovirus_Pos",
+  "Astrovirus_Neg"
+)
+
+
+seurat.all.Ifnl2.Ifnl3$Astrovirus1_expression <- ifelse(
+  seurat.all[["RNA"]]@data["Murine-astrovirus-STL1", ] > 0,
+  "Astrovirus_Pos",
+  "Astrovirus_Neg"
+)
+
+seurat.all.Ifnl2.Ifnl3$Astrovirus5_expression <- ifelse(
+  seurat.all[["RNA"]]@data["Murine-astrovirus-STL5", ] > 0,
+  "Astrovirus_Pos",
+  "Astrovirus_Neg"
+)
+
+table(seurat.all$Astrovirus1_expression)
+# Astrovirus_Neg Astrovirus_Pos 
+#     10226           7613 
+
+
+table(seurat.all$Astrovirus5_expression)
+# Astrovirus_Neg Astrovirus_Pos 
+#      16355           1484 
+
+
+table(seurat.all.Ifnl2.Ifnl3$Astrovirus1_expression)
+# Astrovirus_Neg Astrovirus_Pos 
+#     10226           7613 
+
+
+table(seurat.all.Ifnl2.Ifnl3$Astrovirus5_expression)
+# Astrovirus_Neg Astrovirus_Pos 
+#     16355           1484
+
+
+seurat.all.WT <- subset(seurat.all,subset = modified.ident == "WT naïve")
+seurat.all.WTFFT <- subset(seurat.all,subset = modified.ident == "WT + FFT")
+seurat.all.Rag2Il2rg <- subset(seurat.all,subset = modified.ident == "Rag2-/-Il2rg-/-")
+seurat.all.Rag2Il2rgIfnlr1 <- subset(seurat.all,subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+
+seurat.all.Ifnl2.Ifnl3.WT <- subset(seurat.all.Ifnl2.Ifnl3,subset = modified.ident == "WT naïve")
+seurat.all.Ifnl2.Ifnl3.WTFFT <- subset(seurat.all.Ifnl2.Ifnl3,subset = modified.ident == "WT + FFT")
+seurat.all.Ifnl2.Ifnl3.Rag2Il2rg <- subset(seurat.all.Ifnl2.Ifnl3,subset = modified.ident == "Rag2-/-Il2rg-/-")
+seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1 <- subset(seurat.all.Ifnl2.Ifnl3,subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+
+
+################################################# Astro1 #########################################################
+
+#--------------------ifit1---------------------#
+
+# ifit1 - WT - Astro1
+gene_expression_ifit1_Astro1Express_WTnaive <- select_gene_for_all_cluster(seurat.all.WT,"Ifit1",split_Var = "Astrovirus1_expression",plot_title = "Ifit1")
+ggsave(plot = gene_expression_ifit1_Astro1Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
+
+# Ifit1 - WTFFT - Astro1
+gene_expression_ifit1_Astro1Express_WTFFT <- select_gene_for_all_cluster(seurat.all.WTFFT,"Ifit1",split_Var = "Astrovirus1_expression",plot_title = "Ifit1")
+ggsave(plot = gene_expression_ifit1_Astro1Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Ifit1 - Rag2Il2rg - Astro1
+gene_expression_ifit1_Astro1Express_Rag2Il2rg <- select_gene_for_all_cluster(seurat.all.Rag2Il2rg,"Ifit1",split_Var = "Astrovirus1_expression",plot_title = "Ifit1")
+ggsave(plot = gene_expression_ifit1_Astro1Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Ifit1 - Rag2Il2rgIfnlr1 - Astro1
+gene_expression_ifit1_Astro1Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster(seurat.all.Rag2Il2rgIfnlr1,"Ifit1",split_Var = "Astrovirus1_expression",plot_title = "Ifit1")
+ggsave(plot = gene_expression_ifit1_Astro1Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+
+
+#--------------------Isg15---------------------#
+
+
+# Isg15 - WT - Astro1
+gene_expression_Isg15_Astro1Express_WTnaive <- select_gene_for_all_cluster(seurat.all.WT,"Isg15",split_Var = "Astrovirus1_expression",plot_title = "Isg15")
+ggsave(plot = gene_expression_Isg15_Astro1Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
+
+# Isg15 - WTFFT - Astro1
+gene_expression_Isg15_Astro1Express_WTFFT <- select_gene_for_all_cluster(seurat.all.WTFFT,"Isg15",split_Var = "Astrovirus1_expression",plot_title = "Isg15")
+ggsave(plot = gene_expression_Isg15_Astro1Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Isg15 - Rag2Il2rg - Astro1
+gene_expression_Isg15_Astro1Express_Rag2Il2rg <- select_gene_for_all_cluster(seurat.all.Rag2Il2rg,"Isg15",split_Var = "Astrovirus1_expression",plot_title = "Isg15")
+ggsave(plot = gene_expression_Isg15_Astro1Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Isg15 - Rag2Il2rgIfnlr1 - Astro1
+gene_expression_Isg15_Astro1Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster(seurat.all.Rag2Il2rgIfnlr1,"Isg15",split_Var = "Astrovirus1_expression",plot_title = "Isg15")
+ggsave(plot = gene_expression_Isg15_Astro1Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+
+
+
+#-------------------Ifnl2/3--------------------#
+
+# Ifnl2/3 - WT - Astro1
+gene_expression_Ifnl2.3_Astro1Express_WTnaive <- select_gene_for_all_cluster(seurat.all.Ifnl2.Ifnl3.WT,"Ifnl2",split_Var = "Astrovirus1_expression",plot_title = "Ifnl2/3")
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
+
+# Ifnl2/3 - WTFFT - Astro1
+gene_expression_Ifnl2.3_Astro1Express_WTFFT <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.WTFFT,"Ifnl2",split_Var = "Astrovirus1_expression",plot_title = "Ifnl2/3")
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Ifnl2/3 - Rag2Il2rg - Astro1
+gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rg <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,"Ifnl2",split_Var = "Astrovirus1_expression",plot_title = "Ifnl2/3")
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Ifnl2/3 - Rag2Il2rgIfnlr1 - Astro1
+gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,"Ifnl2",split_Var = "Astrovirus1_expression",plot_title = "Ifnl2/3")
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+
+
+################################################## Astro5 ##############################################################
+
+
+#--------------------ifit1---------------------#
+
+# ifit1 - WT - Astro5
+gene_expression_ifit1_Astro5Express_WTnaive <- select_gene_for_all_cluster(seurat.all.WT,"Ifit1",split_Var = "Astrovirus5_expression",plot_title = "Ifit1")
+ggsave(plot = gene_expression_ifit1_Astro5Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
+
+# Ifit1 - WTFFT - Astro5
+gene_expression_ifit1_Astro5Express_WTFFT <- select_gene_for_all_cluster_old(seurat.all.WTFFT,"Ifit1",split_Var = "Astrovirus5_expression",plot_title = "Ifit1")
+ggsave(plot = gene_expression_ifit1_Astro5Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Ifit1 - Rag2Il2rg - Astro1
+gene_expression_ifit1_Astro5Express_Rag2Il2rg <- select_gene_for_all_cluster(seurat.all.Rag2Il2rg,"Ifit1",split_Var = "Astrovirus5_expression",plot_title = "Ifit1")
+ggsave(plot = gene_expression_ifit1_Astro5Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Ifit1 - Rag2Il2rgIfnlr1 - Astro1
+gene_expression_ifit1_Astro5Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster(seurat.all.Rag2Il2rgIfnlr1,"Ifit1",split_Var = "Astrovirus5_expression",plot_title = "Ifit1")
+ggsave(plot = gene_expression_ifit1_Astro5Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+
+
+#--------------------Isg15---------------------#
+
+
+# Isg15 - WT - Astro1
+gene_expression_Isg15_Astro5Express_WTnaive <- select_gene_for_all_cluster(seurat.all.WT,"Isg15",split_Var = "Astrovirus5_expression",plot_title = "Isg15")
+ggsave(plot = gene_expression_Isg15_Astro5Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
+
+# Isg15 - WTFFT - Astro1
+gene_expression_Isg15_Astro5Express_WTFFT <- select_gene_for_all_cluster(seurat.all.WTFFT,"Isg15",split_Var = "Astrovirus5_expression",plot_title = "Isg15")
+ggsave(plot = gene_expression_Isg15_Astro5Express_WTFFT ,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Isg15 - Rag2Il2rg - Astro1
+gene_expression_Isg15_Astro5Express_Rag2Il2rg <- select_gene_for_all_cluster(seurat.all.Rag2Il2rg,"Isg15",split_Var = "Astrovirus5_expression",plot_title = "Isg15")
+ggsave(plot = gene_expression_Isg15_Astro5Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Isg15 - Rag2Il2rgIfnlr1 - Astro1
+gene_expression_Isg15_Astro5Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster(seurat.all.Rag2Il2rgIfnlr1,"Isg15",split_Var = "Astrovirus5_expression",plot_title = "Isg15")
+ggsave(plot = gene_expression_Isg15_Astro5Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+
+
+
+#-------------------Ifnl2/3--------------------#
+
+
+# Ifnl2/3 - WT - Astro5
+gene_expression_Ifnl2.3_Astro1Express_WTnaive <- select_gene_for_all_cluster(seurat.all.Ifnl2.Ifnl3.WT,"Ifnl2",split_Var = "Astrovirus5_expression",plot_title = "Ifnl2/3")
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
+
+# Ifnl2/3 - WTFFT - Astro1
+gene_expression_Ifnl2.3_Astro5Express_WTFFT <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.WTFFT,"Ifnl2",split_Var = "Astrovirus5_expression",plot_title = "Ifnl2/3")
+ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Ifnl2/3 - Rag2Il2rg - Astro1
+gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rg <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,"Ifnl2",split_Var = "Astrovirus5_expression",plot_title = "Ifnl2/3")
+ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+
+
+# Ifnl2/3 - Rag2Il2rgIfnlr1 - Astro1
+gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,"Ifnl2",split_Var = "Astrovirus5_expression",plot_title = "Ifnl2/3")
+ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+
+
+
+```
+
+
+Per Megan
+1. For all of the IECs (so not individual clusters) and all of the cells for each group (so a different plot for WT naive, a different plot for WT+FFT, etc.)? This would be for the Ifnl2/3, Isg15, Ifit1, and Mda5 plots. Just want to see if there is a clear signal of them being either the same overall or different overall for either the muAstV-negative or -positive cells.
+```{r}
+
+
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(ggbeeswarm)
+
+
+seurat.all <- dataset.list[["epcam"]]
+seurat.all@meta.data$modified.ident <- factor(seurat.all@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+
+
+seurat.all$Astrovirus1_expression <- ifelse(
+  seurat.all[["RNA"]]@data["Murine-astrovirus-STL1", ] > 0,
+  "Astrovirus_Pos",
+  "Astrovirus_Neg"
+)
+
+
+seurat.all$Astrovirus5_expression <- ifelse(
+  seurat.all[["RNA"]]@data["Murine-astrovirus-STL5", ] > 0,
+  "Astrovirus_Pos",
+  "Astrovirus_Neg"
+)
+
+
+seurat.all.Ifnl2.Ifnl3$Astrovirus1_expression <- ifelse(
+  seurat.all[["RNA"]]@data["Murine-astrovirus-STL1", ] > 0,
+  "Astrovirus_Pos",
+  "Astrovirus_Neg"
+)
+
+seurat.all.Ifnl2.Ifnl3$Astrovirus5_expression <- ifelse(
+  seurat.all[["RNA"]]@data["Murine-astrovirus-STL5", ] > 0,
+  "Astrovirus_Pos",
+  "Astrovirus_Neg"
+)
+
+seurat.all$Astrovirus1_expression <- factor(seurat.all$Astrovirus1_expression,levels = c("Astrovirus_Neg","Astrovirus_Pos"))
+seurat.all.Ifnl2.Ifnl3$Astrovirus1_expression <- factor(seurat.all.Ifnl2.Ifnl3$Astrovirus1_expression,levels = c("Astrovirus_Neg","Astrovirus_Pos"))
+
+seurat.all$Astrovirus5_expression <- factor(seurat.all$Astrovirus5_expression,levels = c("Astrovirus_Neg","Astrovirus_Pos"))
+seurat.all.Ifnl2.Ifnl3$Astrovirus5_expression <- factor(seurat.all.Ifnl2.Ifnl3$Astrovirus5_expression,levels = c("Astrovirus_Neg","Astrovirus_Pos"))
+
+
+seurat.all.WT <- subset(seurat.all,subset = modified.ident == "WT naïve")
+seurat.all.WTFFT <- subset(seurat.all,subset = modified.ident == "WT + FFT")
+seurat.all.Rag2Il2rg <- subset(seurat.all,subset = modified.ident == "Rag2-/-Il2rg-/-")
+seurat.all.Rag2Il2rgIfnlr1 <- subset(seurat.all,subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+
+seurat.all.Ifnl2.Ifnl3.WT <- subset(seurat.all.Ifnl2.Ifnl3,subset = modified.ident == "WT naïve")
+seurat.all.Ifnl2.Ifnl3.WTFFT <- subset(seurat.all.Ifnl2.Ifnl3,subset = modified.ident == "WT + FFT")
+seurat.all.Ifnl2.Ifnl3.Rag2Il2rg <- subset(seurat.all.Ifnl2.Ifnl3,subset = modified.ident == "Rag2-/-Il2rg-/-")
+seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1 <- subset(seurat.all.Ifnl2.Ifnl3,subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+
+
+
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(ggbeeswarm)
+
+
+
+##################################### Astrovirus1 #########################################
+
+
+# Ifnl2/3
+
+p.WTFFT.Astrovirus1.Ifnl2.3.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_names = "Ifnl2",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WTFFT.Astrovirus1.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.WTFFT.Astrovirus1.Ifnl2.3.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_name = "Ifnl2",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Ifnl2/3 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WTFFT.Astrovirus1.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Rag2Il2rg.Astrovirus1.Ifnl2.3.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_names = "Ifnl2",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus1.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_name = "Ifnl2",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Ifnl2/3 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_names = "Ifnl2",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_name = "Ifnl2",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Ifnl2/3 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+
+# Isg15
+
+p.WT.Astrovirus1.Isg15.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WT,
+  gene_names = "Isg15",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WT.Astrovirus1.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.WT.Astrovirus1.Isg15.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WT,
+  gene_name = "Isg15",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Isg15 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WT.Astrovirus1.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+p.WTFFT.Astrovirus1.Isg15.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_names = "Isg15",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WTFFT.Astrovirus1.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.WTFFT.Astrovirus1.Isg15.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_name = "Isg15",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Isg15 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WTFFT.Astrovirus1.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+
+p.Rag2Il2rg.Astrovirus1.Isg15.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_names = "Isg15",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus1.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+
+p.Rag2Il2rg.Astrovirus1.Isg15.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_name = "Isg15",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Isg15 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus1.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_names = "Isg15",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_name = "Isg15",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Isg15 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+
+# Ifit1
+
+p.WT.Astrovirus1.Ifit1.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WT,
+  gene_names = "Ifit1",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WT.Astrovirus1.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.WT.Astrovirus1.Ifit1.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WT,
+  gene_name = "Ifit1",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Ifit1 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WT.Astrovirus1.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.WTFFT.Astrovirus1.Ifit1.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_names = "Ifit1",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WTFFT.Astrovirus1.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+
+p.WTFFT.Astrovirus1.Ifit1.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_name = "Ifit1",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Ifit1 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WTFFT.Astrovirus1.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+p.Rag2Il2rg.Astrovirus1.Ifit1.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_names = "Ifit1",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus1.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Rag2Il2rg.Astrovirus1.Ifit1.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_name = "Ifit1",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Ifit1 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus1.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_names = "Ifit1",
+  metadata_var = "Astrovirus1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_name = "Ifit1",
+  split.by = "Astrovirus1_expression",
+  titel_lable = "Ifit1 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+# Mda5
+
+# no found
+
+
+
+
+
+##################################### Astrovirus5 #########################################
+
+
+# Ifnl2/3
+
+p.WTFFT.Astrovirus5.Ifnl2.3.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_names = "Ifnl2",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WTFFT.Astrovirus5.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.WTFFT.Astrovirus5.Ifnl2.3.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_name = "Ifnl2",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Ifnl2/3 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WTFFT.Astrovirus5.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+p.Rag2Il2rg.Astrovirus5.Ifnl2.3.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_names = "Ifnl2",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus5.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Rag2Il2rg.Astrovirus5.Ifnl2.3.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_name = "Ifnl2",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Ifnl2/3 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus5.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_names = "Ifnl2",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_name = "Ifnl2",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Ifnl2/3 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+# Isg15
+
+p.WT.Astrovirus5.Isg15.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WT,
+  gene_names = "Isg15",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WT.Astrovirus5.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.WT.Astrovirus5.Isg15.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WT,
+  gene_name = "Isg15",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Isg15 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WT.Astrovirus5.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+p.WTFFT.Astrovirus5.Isg15.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_names = "Isg15",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WTFFT.Astrovirus5.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.WTFFT.Astrovirus5.Isg15.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_name = "Isg15",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Isg15 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WTFFT.Astrovirus5.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+p.Rag2Il2rg.Astrovirus5.Isg15.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_names = "Isg15",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus5.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Rag2Il2rg.Astrovirus5.Isg15.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_name = "Isg15",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Isg15 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus5.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_names = "Isg15",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_name = "Isg15",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Isg15 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+# Ifit1
+
+p.WT.Astrovirus5.Ifit1.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WT,
+  gene_names = "Ifit1",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WT.Astrovirus5.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.WT.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WT,
+  gene_name = "Ifit1",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Ifit1 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WT.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.WTFFT.Astrovirus5.Ifit1.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_names = "Ifit1",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.WTFFT.Astrovirus5.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.WTFFT.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.WTFFT,
+  gene_name = "Ifit1",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Ifit1 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.WTFFT.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Rag2Il2rg.Astrovirus5.Ifit1.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_names = "Ifit1",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus5.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Rag2Il2rg.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,
+  gene_name = "Ifit1",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Ifit1 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rg.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.boxplot <- plot_gene_boxplot(
+  seurat.obj = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_names = "Ifit1",
+  metadata_var = "Astrovirus5_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
+  seurat.all = seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,
+  gene_name = "Ifit1",
+  split.by = "Astrovirus5_expression",
+  titel_lable = "Ifit1 expression",
+  fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
+)
+
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+# Mda5
+
+# no found
+
+
+
+
+```
+
+
+
+Per Megan
+2.  for the goblet cell markers that Harshad sent, would you be able to just focus on the goblet cell cluster, and make violin plots like this, Where you are looking at the muAstV levels in either the marker-negative or marker-positive cells? It would also be helpful to just give a count of muAstV-positive versus muAstV-negative cell numbers for the marker-negative versus marker-positive groups. Hope that makes sense!
+```{r}
+
+
+Goblet.cluster <- subset(seurat.all,subset = custome.cell.annotation.split.tuft == "Goblet")
+
+
+Goblet.cluster$Muc2_expression <- ifelse(
+  Goblet.cluster[["RNA"]]@data["Muc2", ] > 0,
+  "Muc2_Pos",
+  "Muc2_Neg"
+)
+Goblet.cluster$Fcgbp_expression <- ifelse(
+  Goblet.cluster[["RNA"]]@data["Fcgbp", ] > 0,
+  "Fcgbp_Pos",
+  "Fcgbp_Neg"
+)
+Goblet.cluster$Clca1_expression <- ifelse(
+  Goblet.cluster[["RNA"]]@data["Clca1", ] > 0,
+  "Clca1_Pos",
+  "Clca1_Neg"
+)
+Goblet.cluster$Zg16_expression <- ifelse(
+  Goblet.cluster[["RNA"]]@data["Zg16", ] > 0,
+  "Zg16_Pos",
+  "Zg16_Neg"
+)
+
+
+Goblet.cluster$Muc2_expression <- factor(Goblet.cluster$Muc2_expression,levels = c("Muc2_Neg","Muc2_Pos"))
+Goblet.cluster$Fcgbp_expression <- factor(Goblet.cluster$Fcgbp_expression,levels = c("Fcgbp_Neg","Fcgbp_Pos"))
+Goblet.cluster$Clca1_expression <- factor(Goblet.cluster$Clca1_expression,levels = c("Clca1_Neg","Clca1_Pos"))
+Goblet.cluster$Zg16_expression <- factor(Goblet.cluster$Zg16_expression,levels = c("Zg16_Neg","Zg16_Pos"))
+
+Goblet.cluster.WT <- subset(Goblet.cluster,subset = modified.ident == "WT naïve")
+Goblet.cluster.WTFFT <- subset(Goblet.cluster,subset = modified.ident == "WT + FFT")
+Goblet.cluster.Rag2Il2rg <- subset(Goblet.cluster,subset = modified.ident == "Rag2-/-Il2rg-/-")
+Goblet.cluster.Rag2Il2rgIfnlr1 <- subset(Goblet.cluster,subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+
+
+
+##################################### Astrovirus1 #########################################
+
+# Muc2
+
+p.Goblet.WT.Astrovirus1.Muc2.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WT,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Muc2_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WT.Astrovirus1.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WT.Astrovirus1.Muc2.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WT,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Muc2_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Muc2_Neg", "Muc2_Pos")
+)
+
+ggsave(p.Goblet.WT.Astrovirus1.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.WTFFT.Astrovirus1.Muc2.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WTFFT ,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Muc2_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus1.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.WTFFT.Astrovirus1.Muc2.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WTFFT,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Muc2_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Muc2_Neg", "Muc2_Pos")
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus1.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rg,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Muc2_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rg,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Muc2_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Muc2_Neg", "Muc2_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Muc2_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Muc2_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Muc2_Neg", "Muc2_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+# Fcgbp
+
+p.Goblet.WT.Astrovirus1.Fcgbp.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WT ,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Fcgbp_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WT.Astrovirus1.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WT.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WT,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Fcgbp_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
+)
+
+ggsave(p.Goblet.WT.Astrovirus1.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.WTFFT.Astrovirus1.Fcgbp.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WTFFT ,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Fcgbp_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus1.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+
+p.Goblet.WTFFT.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WTFFT,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Fcgbp_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus1.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rg,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Fcgbp_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rg,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Fcgbp_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Fcgbp_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Fcgbp_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+# Clca1
+
+p.Goblet.WT.Astrovirus1.Clca1.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WT ,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Clca1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WT.Astrovirus1.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WT.Astrovirus1.Clca1.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WT,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Clca1_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Clca1_Neg", "Clca1_Pos")
+)
+
+ggsave(p.Goblet.WT.Astrovirus1.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.WTFFT.Astrovirus1.Clca1.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WTFFT ,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Clca1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus1.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WTFFT.Astrovirus1.Clca1.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WTFFT,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Clca1_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Clca1_Neg", "Clca1_Pos")
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus1.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rg,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Clca1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rg,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Clca1_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Clca1_Neg", "Clca1_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Clca1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Clca1_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Clca1_Neg", "Clca1_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+# Zg16
+
+p.Goblet.WT.Astrovirus1.Zg16.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WT ,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Zg16_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WT.Astrovirus1.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WT.Astrovirus1.Zg16.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WT,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Zg16_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Zg16_Neg", "Zg16_Pos")
+)
+
+ggsave(p.Goblet.WT.Astrovirus1.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.WTFFT.Astrovirus1.Zg16.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WTFFT ,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Zg16_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus1.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WTFFT.Astrovirus1.Zg16.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WTFFT,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Zg16_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Zg16_Neg", "Zg16_Pos")
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus1.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rg,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Zg16_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rg,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Zg16_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Zg16_Neg", "Zg16_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_names = "Murine-astrovirus-STL1",
+  metadata_var = "Zg16_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_name = "Murine-astrovirus-STL1",
+  split.by = "Zg16_expression",
+  titel_lable = "Murine-astrovirus-STL1 Expression",
+  fisher_groups = c("Zg16_Neg", "Zg16_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+##################################### Astrovirus5 #########################################
+
+# Muc2
+
+p.Goblet.WT.Astrovirus5.Muc2.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WT,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Muc2_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+# Murine-astrovirus-STL5 0 counts
+
+
+
+p.Goblet.WT.Astrovirus5.Muc2.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WT,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Muc2_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Muc2_Neg", "Muc2_Pos")
+)
+
+ggsave(p.Goblet.WT.Astrovirus5.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Muc2.violin.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WTFFT.Astrovirus5.Muc2.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WTFFT ,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Muc2_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus5.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WTFFT.Astrovirus5.Muc2.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WTFFT,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Muc2_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Muc2_Neg", "Muc2_Pos")
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus5.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rg,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Muc2_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rg,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Muc2_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Muc2_Neg", "Muc2_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Muc2_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Muc2_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Muc2_Neg", "Muc2_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+
+
+# Fcgbp
+
+p.Goblet.WT.Astrovirus5.Fcgbp.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WT ,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Fcgbp_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WT.Astrovirus5.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WT.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WT,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Fcgbp_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
+)
+
+ggsave(p.Goblet.WT.Astrovirus5.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.WTFFT.Astrovirus5.Fcgbp.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WTFFT ,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Fcgbp_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus5.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WTFFT,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Fcgbp_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rg,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Fcgbp_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rg,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Fcgbp_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Fcgbp_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Fcgbp_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+# Clca1
+
+p.Goblet.WT.Astrovirus5.Clca1.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WT,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Clca1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+# Murine-astrovirus-STL5 has 0 counts
+
+
+p.Goblet.WT.Astrovirus5.Clca1.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WT,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Clca1_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Clca1_Neg", "Clca1_Pos")
+)
+
+ggsave(p.Goblet.WT.Astrovirus5.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.WTFFT.Astrovirus5.Clca1.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WTFFT ,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Clca1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus5.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.WTFFT.Astrovirus5.Clca1.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WTFFT,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Clca1_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Clca1_Neg", "Clca1_Pos")
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus5.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rg,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Clca1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rg,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Clca1_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Clca1_Neg", "Clca1_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Clca1_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Clca1_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Clca1_Neg", "Clca1_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+
+# Zg16
+
+p.Goblet.WT.Astrovirus5.Zg16.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WT ,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Zg16_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+# Murine-astrovirus-STL5 has 0 counts
+
+
+p.Goblet.WT.Astrovirus5.Zg16.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WT,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Zg16_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Zg16_Neg", "Zg16_Pos")
+)
+
+ggsave(p.Goblet.WT.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.WTFFT.Astrovirus5.Zg16.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.WTFFT ,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Zg16_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus5.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.WTFFT.Astrovirus5.Zg16.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.WTFFT,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Zg16_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Zg16_Neg", "Zg16_Pos")
+)
+
+ggsave(p.Goblet.WTFFT.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rg,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Zg16_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rg,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Zg16_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Zg16_Neg", "Zg16_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.boxplot <- plot_gene_boxplot(
+  seurat.obj = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_names = "Murine-astrovirus-STL5",
+  metadata_var = "Zg16_expression",
+  slot = "data",          # use normalized expression
+  exp_transform = TRUE,   # convert log1p -> linear
+  filter_zeros = TRUE
+)
+
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+
+
+
+p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin  <- plot_violin_stats(
+  seurat.all = Goblet.cluster.Rag2Il2rgIfnlr1,
+  gene_name = "Murine-astrovirus-STL5",
+  split.by = "Zg16_expression",
+  titel_lable = "Murine-astrovirus-STL5 Expression",
+  fisher_groups = c("Zg16_Neg", "Zg16_Pos")
+)
+
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+
+
+
+```
+
+
+# violin plots for all samples (CD45+ cells)
+```{r}
+
+unique(dataset.list[["epcam"]]@meta.data$custome.cell.annotation.split.tuft)
+
+unique(seurat.all@meta.data$custome.cell.annotation.split.tuft)
+
+seurat.all <- dataset.list[["cd45"]]
+seurat.all@meta.data$custome.cell.annotation.split.tuft <- factor(seurat.all@meta.data$custome.cell.annotation.split.tuft,levels = c("B cell","T cell","Macrophage","Erythroid","Erythoid cell","Mesenchymal Cell","Stromal"))
+
+unique(seurat.all$custome.cell.annotation.split.tuft)
+
+
+seurat.all@meta.data$modified.ident <- factor(seurat.all@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+
+
+violin_stl1_4samples_cd45 <- plot_violin(seurat.all,"Murine-astrovirus-STL1")
+ggsave(plot = violin_stl1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_stl5_4samples_cd45 <- plot_violin(seurat.all,"Murine-astrovirus-STL5")
+ggsave(plot = violin_stl5_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_ifnl2_4samples_cd45 <- plot_violin(seurat.all,"Ifnl2")
+ggsave(plot = violin_ifnl2_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_ifnl3_4samples_cd45 <- plot_violin(seurat.all,"Ifnl3")
+ggsave(plot = violin_ifnl3_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl3_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+violin_ifit1_4samples_cd45 <- plot_violin(seurat.all,"Ifit1")
+ggsave(plot = violin_ifit1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+violin_ifnb1_4samples_cd45 <- plot_violin(seurat.all,"Ifnb1")
+ggsave(plot = violin_ifnb1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+
+# there is no Ifna5
+# violin_ifna5 <- plot_violin(seurat,"Ifna5")
+# ggsave(plot = violin_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+# ifnlr1/IFIH1
+violin_ifnlr1_4samples_cd45 <- plot_violin(seurat.all,"Ifnlr1")
+ggsave(plot = violin_ifnlr1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_Ifih1_4samples_cd45 <- plot_violin(seurat.all,"Ifih1")
+ggsave(plot = violin_Ifih1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifih1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_Ddx58_4samples_cd45 <- plot_violin(seurat.all,"Ddx58")
+ggsave(plot = violin_Ddx58_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_Ddx58_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+
+seurat.all.Ifnl2.Ifnl3 <- seurat.all
+seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] <- seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] + seurat.all.Ifnl2.Ifnl3@assays$RNA@data["Ifnl3",]
+seurat.all.Ifnl2.Ifnl3@meta.data$modified.ident <- factor(seurat.all.Ifnl2.Ifnl3@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/- ","Rag2-/-Il2rg-/-Ifnlr1-/-"))
+seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft <- factor(seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft,levels = c("B cell","T cell","Macrophage","Erythroid","Erythoid cell","Mesenchymal Cell","Stromal"))
+
+
+violin_ifnl2.ifnl3_4samples_cd45 <- plot_violin(seurat.all.Ifnl2.Ifnl3,"Ifnl2")
+ggsave(plot = violin_ifnl2.ifnl3_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/ifnl2.ifnl3_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+
+
+```
+
+
+#  violin plot for Ifnl2 and Ifnl3 in CD45+ cells
+```{r}
+
+cd45.seurat <- subset(dataset.list[["cd45"]],subset = modified.ident %in% c("WT + FFT","WT naïve"))
+#seurat@meta.data$modified.ident <- droplevels(seurat@meta.data$modified.ident)
+# seurat@meta.data$custome.cell.annotation.final <- factor(seurat@meta.data$custome.cell.annotation.final,levels = c("TA/Stem","Enterocyte EP","Enterocyte LP","IP Enterocyte","ID Enterocyte","MP Enterocyte","MD Enterocyte","D Enterocyte","Enteroendocrine","Goblet","Paneth","Tuft","Stromal"))
+
+cd45.seurat@meta.data$modified.ident <- factor(cd45.seurat@meta.data$modified.ident,levels = c("WT naïve","WT + FFT"))
+
+
+violin_ifnl2 <- plot_violin(cd45.seurat,"Ifnl2")
+ggsave(plot = violin_ifnl2,file = "~/scRNA/Harshad/annotation/final_plots_update/cd45_Ifnl2_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+violin_ifnl3 <- plot_violin(cd45.seurat,"Ifnl3")
+ggsave(plot = violin_ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/cd45_Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
+
+
+```
+
+
+# top 5 gene expression per cluster heatmap
+```{r}
+
+library(Seurat)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+
+# Step 1: Set your custom cluster ID as the active identity
+Idents(combined.all.final) <- "custome.cell.annotation.final"
+
+# Step 2: Compute average expression per cluster
+avg_expr <- AverageExpression(combined.all.final, return.seurat = FALSE)$RNA  # or $SCT if you're using that
+
+# Step 3: Identify top 5 expressed genes per cluster
+top_genes <- lapply(colnames(avg_expr), function(cluster) {
+  expr_col <- as.data.frame(avg_expr)[, cluster, drop = FALSE]
+  expr_col$gene <- rownames(expr_col)
+  top5 <- expr_col %>%
+    arrange(desc(.[[cluster]])) %>%
+    head(5)
+  top5$gene
+})
+
+# Step 4: Get unique top genes
+top_genes_unique <- unique(unlist(top_genes))
+
+# Step 5: Format expression data
+heatmap_data <- as.data.frame(avg_expr[top_genes_unique, ])
+heatmap_data$gene <- rownames(heatmap_data)
+
+# Convert to long format for ggplot
+heatmap_long <- heatmap_data %>%
+  pivot_longer(cols = -gene, names_to = "cluster", values_to = "expression")
+
+# Optional: scale per gene (row-wise z-score)
+heatmap_long <- heatmap_long %>%
+  group_by(gene) %>%
+  mutate(scaled_expr = scale(expression)[, 1]) %>%
+  ungroup()
+
+# Step 6: Plot heatmap using ggplot
+p.top5.gene.expression <- ggplot(heatmap_long, aes(x = cluster, y = gene, fill = scaled_expr)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0,
+                       name = "Scaled Expression") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12,face = "bold"),  # << increase font size here
+    axis.text.y = element_text(size = 12,face = "bold")  # optional: adjust y-axis too
+  ) +
+  labs(title = "Top 5 Expressed Genes per Custom Cluster",x = "",y = "")
+
+ggsave(p.top5.gene.expression,file = "~/scRNA/Harshad/annotation/final_plots_update/top5.gene.expression.svg",width = 8, height = 8, dpi = 600)
+ggsave(p.top5.gene.expression,file = "~/scRNA/Harshad/annotation/final_plots_update/top5.gene.expression.pdf",width = 8, height = 8, dpi = 600)
+
+
+```
+
+
+# correlations
+```{r}
+
+#################################################################################################
+# correlation expression for stl5/stl1 and ifnl3/ifnl2 (all epcam cluster, goblet cluster, all clusters # labeled as “enterocyte” <put them together> , cells that have stl5 +) (only for wtfft)
+
+seurat.epcam.wtfft <- subset(dataset.list[["epcam"]],subset = modified.ident == 
+                               "WT + FFT")
+
+seurat.goblet.wtfft <- subset(dataset.list[["epcam"]],subset = (modified.ident == "WT + FFT" & custome.cell.annotation.split.tuft == "Goblet"))
+
+seurat.enterocyte.wtfft <- subset(combined.all.final,subset = custome.cell.annotation.final %like% "Enterocyte")
+
+seurat.stl5.positive.wtfft  <- subset(combined.all.final, subset = `Murine-astrovirus-STL5` > 0)
+
+
+# -----------------------------correlation of stl5 vs ifnl3---------------------------------------#
+# linear model
+stl5.ifnl3.count <- seurat.epcam.wtfft@assays$RNA@data %>%
+             data.frame(.) %>%
+             filter(rownames(.) %in% c("Murine-astrovirus-STL5","Ifnl3")) %>% 
+             t(.) %>%
+             data.frame(.)
+
+# linear model
+stl5.ifnl3.model <- lm(Murine.astrovirus.STL5~ Ifnl3, data=stl5.ifnl3.count)
+summary(stl5.ifnl3.model)
+# Call:
+# lm(formula = Murine.astrovirus.STL5 ~ Ifnl3, data = stl5.ifnl3.count)
+# 
+# Residuals:
+#     Min      1Q  Median      3Q     Max 
+# -2.7606 -0.1412 -0.1412 -0.1412  6.5467 
+# 
+# Coefficients:
+#             Estimate Std. Error t value Pr(>|t|)    
+# (Intercept) 0.141218   0.008581  16.457  < 2e-16 ***
+# Ifnl3       0.927953   0.124257   7.468 9.51e-14 ***
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 0.6151 on 5145 degrees of freedom
+# Multiple R-squared:  0.01072,	Adjusted R-squared:  0.01053 
+# F-statistic: 55.77 on 1 and 5145 DF,  p-value: 9.512e-14
+
+# ggplot
+stl5.ifnl3.plot <- ggplot(stl5.ifnl3.count,aes(Ifnl3, Murine.astrovirus.STL5)) +
+                      geom_point() +
+                      geom_smooth(method='lm') +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+
+ggsave(plot = stl5.ifnl3.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5.ifnl3.lm.svg",width = 7, height = 5, dpi = 600)
+
+
+
+# pearson
+stl5.ifnl3.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 = 'Ifnl3', feature2 = 'Murine-astrovirus-STL5') +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+ggsave(plot = stl5.ifnl3.pearson.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5.ifnl3.pearson.svg",width = 7, height = 5, dpi = 600)
+
+
+
+# -----------------------------correlation of stl5 vs ifnl2---------------------------------------#
+# make count table
+stl5.ifnl2.count <- seurat.epcam.wtfft@assays$RNA@data %>%
+             data.frame(.) %>%
+             filter(rownames(.) %in% c("Murine-astrovirus-STL5","Ifnl2")) %>% 
+             t(.) %>%
+             data.frame(.)
+
+# linear model
+stl5.ifnl2.model <- lm(Murine.astrovirus.STL5~ Ifnl2, data=stl5.ifnl2.count)
+summary(stl5.ifnl2.model)
+# Call:
+# lm(formula = Murine.astrovirus.STL5 ~ Ifnl2, data = stl5.ifnl2.count)
+# 
+# Residuals:
+#     Min      1Q  Median      3Q     Max 
+# -3.5025 -0.1417 -0.1417 -0.1417  6.5462 
+# 
+# Coefficients:
+#             Estimate Std. Error t value Pr(>|t|)    
+# (Intercept) 0.141738   0.008575  16.529  < 2e-16 ***
+# Ifnl2       1.272762   0.164965   7.715 1.44e-14 ***
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 0.6149 on 5145 degrees of freedom
+# Multiple R-squared:  0.01144,	Adjusted R-squared:  0.01125 
+# F-statistic: 59.53 on 1 and 5145 DF,  p-value: 1.439e-14
+
+# ggplot
+stl5.ifnl2.plot <- ggplot(stl5.ifnl2.count,aes(Ifnl2, Murine.astrovirus.STL5)) +
+                      geom_point() +
+                      geom_smooth(method='lm') +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+
+ggsave(plot = stl5.ifnl2.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5.ifnl2.lm.svg",width = 7, height = 5, dpi = 600)
+
+# pearson
+stl5.ifnl2.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 = 'Ifnl2', feature2 = 'Murine-astrovirus-STL5') +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+ggsave(plot = stl5.ifnl2.pearson.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5.ifnl2.pearson.svg",width = 7, height = 5, dpi = 600)
+
+
+
+
+# -----------------------------correlation of stl1 vs ifnl3---------------------------------------#
+
+# count table
+stl1.ifnl3.count <- seurat.epcam.wtfft@assays$RNA@data %>%
+             data.frame(.) %>%
+             filter(rownames(.) %in% c("Murine-astrovirus-STL1","Ifnl3")) %>% 
+             t(.) %>%
+             data.frame(.)
+
+
+
+# linear model
+stl1.ifnl3.model <- lm(Murine.astrovirus.STL1~ Ifnl3, data=stl1.ifnl3.count)
+summary(stl1.ifnl3.model)
+# Call:
+# lm(formula = Murine.astrovirus.STL1 ~ Ifnl3, data = stl1.ifnl3.count)
+# 
+# Residuals:
+#     Min      1Q  Median      3Q     Max 
+# -3.9402 -0.8585 -0.8585  0.6656  7.9468 
+# 
+# Coefficients:
+#             Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)  0.85848    0.01834  46.818  < 2e-16 ***
+# Ifnl3        2.09176    0.26552   7.878 4.03e-15 ***
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 1.314 on 5145 degrees of freedom
+# Multiple R-squared:  0.01192,	Adjusted R-squared:  0.01173 
+# F-statistic: 62.06 on 1 and 5145 DF,  p-value: 4.033e-15
+
+# ggplot
+stl1.ifnl3.plot <- ggplot(stl1.ifnl3.count,aes(Ifnl3, Murine.astrovirus.STL1)) +
+                      geom_point() +
+                      geom_smooth(method='lm') +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+
+ggsave(plot = stl1.ifnl3.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1.ifnl3.lm.svg",width = 7, height = 5, dpi = 600)
+
+# pearson
+stl1.ifnl3.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 = 'Ifnl3', feature2 = 'Murine-astrovirus-STL1') +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+ggsave(plot = stl1.ifnl3.pearson.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1.ifnl3.pearson.svg",width = 7, height = 5, dpi = 600)
+
+
+# -----------------------------correlation of stl1 vs ifnl2---------------------------------------#
+
+# count table
+stl1.ifnl2.count <- seurat.epcam.wtfft@assays$RNA@data %>%
+             data.frame(.) %>%
+             filter(rownames(.) %in% c("Murine-astrovirus-STL1","Ifnl2")) %>% 
+             t(.) %>%
+             data.frame(.)
+
+
+
+# linear model
+stl1.ifnl2.model <- lm(Murine.astrovirus.STL1~ Ifnl2, data=stl1.ifnl2.count)
+summary(stl1.ifnl2.model)
+# Call:
+# lm(formula = Murine.astrovirus.STL1 ~ Ifnl2, data = stl1.ifnl2.count)
+# 
+# Residuals:
+#     Min      1Q  Median      3Q     Max 
+# -5.4317 -0.8615 -0.8615  0.6700  7.9438 
+# 
+# Coefficients:
+#             Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)   0.8615     0.0184   46.83  < 2e-16 ***
+# Ifnl2         1.7308     0.3539    4.89 1.04e-06 ***
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 1.319 on 5145 degrees of freedom
+# Multiple R-squared:  0.004626,	Adjusted R-squared:  0.004433 
+# F-statistic: 23.91 on 1 and 5145 DF,  p-value: 1.039e-06
+
+# ggplot
+stl1.ifnl2.plot <- ggplot(stl1.ifnl2.count,aes(Ifnl2, Murine.astrovirus.STL1)) +
+                      geom_point() +
+                      geom_smooth(method='lm') +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+
+ggsave(plot = stl1.ifnl2.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1.ifnl2.lm.svg",width = 7, height = 5, dpi = 600)
+
+# pearson
+stl1.ifnl2.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 = 'Ifnl2', feature2 = 'Murine-astrovirus-STL1') +
+                      theme(axis.text.x = element_text(size = 10),
+                            axis.text.y = element_text(size = 10),
+                            axis.title = element_text(size = 10))
+
+ggsave(plot = stl1.ifnl2.pearson.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1.ifnl2.pearson.svg",width = 7, height = 5, dpi = 600)
+
+
+
+# --------------------------correlation of stl1+stl5 vs ifnl2+ifnl3 (only keep ifnl2+ifnl3 non-0 cells)-----------------------#
+
+
+
+
+
+
+
+```
+
+
+
+# overall number of cells and number of cells after filtration, cells per sample. How did we do filtration.
+```{r}
+# Rag2Il2rgIfnlr1 Rag2Il2rg       WTFFT           Wtnaive
+
+seurat.Wtnaive <- subset(combined.all.final,subset = modified.ident == "WT naïve")
+seurat.WTFFT <- subset(combined.all.final,subset = modified.ident == "WT + FFT")
+seurat.Rag2Il2rg <- subset(combined.all.final,subset = modified.ident == "Rag2-/-Il2rg-/-")
+seurat.Rag2Il2rgIfnlr1 <- subset(combined.all.final,subset = modified.ident == "Rag2-/-Il2rg-/-Ifnlr1-/-")
+
+```
+
+
+
+# looking for certain genes
+```{r}
+
+# Ifna1 or Ifa1, Ifna4 or Ifa4 and Ifna11 or If1ai10
+rownames(combined.all.final)[rownames(combined.all.final) %like% "Ifna1"]
+rownames(combined.all.final)[rownames(combined.all.final) %like% "Ifa1"]
+rownames(combined.all.final)[rownames(combined.all.final) %like% "Ifa4"]
+rownames(combined.all.final)[rownames(combined.all.final) %like% "Ifna11"]
+rownames(combined.all.final)[rownames(combined.all.final) %like% "Ifnl2"]
+
+```
+
+
+####################
+# Pathway analysis #
+####################
+
+
+# read Hallmark database
+```{r}
+
+# select the MH gene set from MSigDB website
+h_gene_sets = msigdbr(species = "mouse", category = "H")
+#    <chr>  <chr>     <chr>   <chr>             <int> <chr>        <chr>                       <int> <chr>            <chr> <chr>  
+#  1 H      ""        HALLMA… Abca1             11303 ENSMUSG0000… ABCA1                          19 ENSG00000165029  M5905 267710…
+#  2 H      ""        HALLMA… Abcb8             74610 ENSMUSG0000… ABCB8                       11194 ENSG00000197150  M5905 267710…
+#  3 H      ""        HALLMA… Acaa2             52538 ENSMUSG0000… ACAA2                       10449 ENSG00000167315  M5905 267710…
+#  4 H      ""        HALLMA… Acadl             11363 ENSMUSG0000… ACADL                          33 ENSG00000115361  M5905 267710…
+#  5 H      ""        HALLMA… Acadm             11364 ENSMUSG0000… ACADM                          34 ENSG00000117054  M5905 267710…
+#  6 H      ""        HALLMA… Acads             11409 ENSMUSG0000… ACADS                          35 ENSG00000122971  M5905 267710…
+#  7 H      ""        HALLMA… Acly             104112 ENSMUSG0000… ACLY                           47 ENSG00000131473  M5905 267710…
+#  8 H      ""        HALLMA… Aco2              11429 ENSMUSG0000… ACO2                           50 ENSG00000100412  M5905 267710…
+#  9 H      ""        HALLMA… Acox1             11430 ENSMUSG0000… ACOX1                          51 ENSG00000161533  M5905 267710…
+# 10 H      ""        HALLMA… Adcy6             11512 ENSMUSG0000… ADCY6                         112 ENSG00000174233  M5905 267710…
+
+# split fgsea table to gene symbol and gs_name
+h_fgsea_sets <- h_gene_sets %>% split(x = .$gene_symbol, f = .$gs_name)
+# 50 Hallmark gene sets
+
+hall_mark_gene_set <- gsub("HALLMARK_","",names(h_fgsea_sets))
+
+```
+
+
+# extract MD enterocyte, MP enterocyte, and Goblet dataset
+```{r}
+
+epcam.MD_enterocyte.final <- subset(epcam.final,custome.cell.annotation.split.tuft == "MD Enterocyte")
+epcam.MP_enterocyte.final <- subset(epcam.final,custome.cell.annotation.split.tuft == "MP Enterocyte")
+epcam.Goblet.final <- subset(epcam.final,custome.cell.annotation.split.tuft == "Goblet")
+
+```
+
+
+
+
+#---------------------------------------------------------MD enterocyte---------------------------------------------------#
+
+
+
+
+#-----------MD enterocyte (WT naive vs WT+FFT)-------------#
+```{r}
+
+
+epcam.WTnaive.WTFFT.MD_enterocyte.final <- subset(epcam.MD_enterocyte.final,modified.ident %in% c("WT + FFT","WT naïve"))
+#epcam.WTnaive.WTFFT.MD_enterocyte.final <- ScaleData(epcam.WTnaive.WTFFT.MD_enterocyte.final)
+
+# reference: https://crazyhottommy.github.io/scRNA-seq-workshop-Fall-2019/scRNAseq_workshop_3.html
+WTnaive.WTFFT.MD_enterocyte.wilcox_test <- wilcoxauc(epcam.WTnaive.WTFFT.MD_enterocyte.final, 'modified.ident') 
+
+
+#--------------------------WTFFT-------------------------------#
+
+
+WTFFT_WTnaive.WTFFT.MD_enterocyte.gsea <- WTnaive.WTFFT.MD_enterocyte.wilcox_test %>%
+                                    #filter(abs(logFC) >= 1) %>%
+                                    dplyr::filter(group == "WT + FFT") %>%
+                                    arrange(desc(auc)) %>% 
+                                    dplyr::select(feature, auc) %>%
+                                    deframe()
+     
+WTFFT_WTnaive.WTFFT.MD_enterocyte.gsea <-WTFFT_WTnaive.WTFFT.MD_enterocyte.gsea[!is.na(WTFFT_WTnaive.WTFFT.MD_enterocyte.gsea)]
+     
+
+WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTFFT_WTnaive.WTFFT.MD_enterocyte.gsea)
+
+WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig <- WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes %>%
+                                                 filter(padj < 0.05) %>%
+                                                 mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig.csv")
+
+
+WTFFT_WTnaive.WTFFT.MD_enterocyte.p <- ggplot(WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                      geom_col(aes(fill= padj < 0.05)) +
+                                      coord_flip() +
+                                      scale_fill_manual(values= c("grey", "red")) + 
+                                      scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                      labs(x="", y="Normalized Enrichment Score",
+                                           title="WTFFT") + 
+                                      theme_minimal()
+
+     
+ggsave(WTFFT_WTnaive.WTFFT.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+
+#---------------------------------------WT naive------------------------------------------#
+
+
+WTnaive_WTnaive.WTFFT.MD_enterocyte.gsea <- WTnaive.WTFFT.MD_enterocyte.wilcox_test %>%
+                #filter(abs(logFC) >= 1) %>%
+                dplyr::filter(group == "WT naïve") %>%
+                arrange(desc(auc)) %>% 
+                dplyr::select(feature, auc) %>%
+                deframe()
+     
+WTnaive_WTnaive.WTFFT.MD_enterocyte.gsea <- WTnaive_WTnaive.WTFFT.MD_enterocyte.gsea[!is.na(WTnaive_WTnaive.WTFFT.MD_enterocyte.gsea)]
+     
+     
+WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTnaive_WTnaive.WTFFT.MD_enterocyte.gsea)
+WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig <- WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes %>%
+                                                     filter(padj < 0.05) %>%
+                                                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig.csv")
+
+WTnaive_WTnaive.WTFFT.MD_enterocyte.p <- ggplot(WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                            geom_col(aes(fill= padj < 0.05)) +
+                            coord_flip() +
+                            scale_fill_manual(values= c("grey", "red")) + 
+                            scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                            labs(x="", y="Normalized Enrichment Score",
+                                 title="WT naïve") + 
+                            theme_minimal()
+
+     
+ggsave(WTnaive_WTnaive.WTFFT.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+```
+
+
+
+#-----------MD enterocyte (WT naive vs Rag2-/-Il2rg-/-)-------------#
+```{r}
+
+
+epcam.Naive.Rag2.MD_enterocyte.final <- subset(epcam.final,modified.ident %in% c("Rag2-/-Il2rg-/-","WT naïve"))
+
+
+epcam.Naive.Rag2.MD_enterocyte.wilcox_test <- wilcoxauc(epcam.Naive.Rag2.MD_enterocyte.final, 'modified.ident') 
+
+
+
+#-------------------------WT naïve------------------------#
+
+
+Naive_Naive.Rag2.MD_enterocyte.gsea <- epcam.Naive.Rag2.MD_enterocyte.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "WT naïve") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+Naive_Naive.Rag2.MD_enterocyte.gsea <-Naive_Naive.Rag2.MD_enterocyte.gsea[!is.na(Naive_Naive.Rag2.MD_enterocyte.gsea)]
+     
+
+Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Naive_Naive.Rag2.MD_enterocyte.gsea)
+
+Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig <- Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
+
+
+Naive_Naive.Rag2.MD_enterocyte.p <- ggplot(Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="WT naïve") + 
+                                    theme_minimal()
+
+     
+ggsave(Naive_Naive.Rag2.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+
+
+#-------------------------Rag2-/-Il2rg-/-------------------------#
+
+
+Rag2_Naive.Rag2.MD_enterocyte.gsea <- epcam.Naive.Rag2.MD_enterocyte.wilcox_test %>%
+                                      #filter(abs(logFC) >= 1) %>%
+                                      dplyr::filter(group == "Rag2-/-Il2rg-/-") %>%
+                                      arrange(desc(auc)) %>% 
+                                      dplyr::select(feature, auc) %>%
+                                      deframe()
+     
+Rag2_Naive.Rag2.MD_enterocyte.gsea <- Rag2_Naive.Rag2.MD_enterocyte.gsea[!is.na(Rag2_Naive.Rag2.MD_enterocyte.gsea)]
+     
+     
+Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Rag2_Naive.Rag2.MD_enterocyte.gsea)
+
+Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig <- Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes %>%
+                                                     filter(padj < 0.05) %>%
+                                                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
+
+Rag2_Naive.Rag2.MD_enterocyte.p <- ggplot(Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                            geom_col(aes(fill= padj < 0.05)) +
+                            coord_flip() +
+                            scale_fill_manual(values= c("grey", "red")) + 
+                            scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                            labs(x="", y="Normalized Enrichment Score",
+                                 title="Rag2-/-Il2rg-/-") + 
+                            theme_minimal()
+
+     
+ggsave(Rag2_Naive.Rag2.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+```
+
+
+
+#-----------MD enterocyte (WTFFT vs Rag2-/-Il2rg-/-)-------------#
+```{r}
+
+epcam.WTFFT.Rag2.MD_enterocyte.final <- subset(epcam.final,modified.ident %in% c("Rag2-/-Il2rg-/-","WT + FFT"))
+
+
+epcam.WTFFT.Rag2.MD_enterocyte.wilcox_test <- wilcoxauc(epcam.WTFFT.Rag2.MD_enterocyte.final, 'modified.ident') 
+
+
+#-------------------------WT + FFT-----------------------#
+
+
+WTFFT_WTFFT.Rag2.MD_enterocyte.gsea <- epcam.WTFFT.Rag2.MD_enterocyte.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "WT + FFT") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+WTFFT_WTFFT.Rag2.MD_enterocyte.gsea <- WTFFT_WTFFT.Rag2.MD_enterocyte.gsea[!is.na(WTFFT_WTFFT.Rag2.MD_enterocyte.gsea)]
+     
+
+WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTFFT_WTFFT.Rag2.MD_enterocyte.gsea)
+
+WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig <- WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
+
+
+WTFFT_WTFFT.Rag2.MD_enterocyte.p <- ggplot(WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="WT + FFT") + 
+                                    theme_minimal()
+
+     
+ggsave(WTFFT_WTFFT.Rag2.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+
+
+#-------------------------Rag2-/-Il2rg-/-------------------------#
+
+
+Rag2_WTFFT.Rag2.MD_enterocyte.gsea <- epcam.WTFFT.Rag2.MD_enterocyte.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "Rag2-/-Il2rg-/-") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+Rag2_WTFFT.Rag2.MD_enterocyte.gsea <- Rag2_WTFFT.Rag2.MD_enterocyte.gsea[!is.na(Rag2_WTFFT.Rag2.MD_enterocyte.gsea)]
+     
+
+Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Rag2_WTFFT.Rag2.MD_enterocyte.gsea)
+
+Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig <- Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
+
+
+
+
+Rag2_WTFFT.Rag2.MD_enterocyte.p <- ggplot(Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="Rag2-/-Il2rg-/-") + 
+                                    theme_minimal()
+
+     
+ggsave(Rag2_WTFFT.Rag2.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+
+```
+
+
+
+
+#----------------------------------------------------------MP enterocyte------------------------------------------------------#
+
+
+
+
+#-----------MP enterocytee (WT naive vs WT+FFT)-------------#
+```{r}
+
+
+epcam.WTnaive.WTFFT.MP_enterocyte.final <- subset(epcam.MP_enterocyte.final,modified.ident %in% c("WT + FFT","WT naïve"))
+
+
+WTnaive.WTFFT.MP_enterocyte.wilcox_test <- wilcoxauc(epcam.WTnaive.WTFFT.MP_enterocyte.final, 'modified.ident') 
+
+
+#--------------------------WTFFT-------------------------------#
+
+
+WTFFT_WTnaive.WTFFT.MP_enterocyte.gsea <- WTnaive.WTFFT.MP_enterocyte.wilcox_test %>%
+                                    #filter(abs(logFC) >= 1) %>%
+                                    dplyr::filter(group == "WT + FFT") %>%
+                                    arrange(desc(auc)) %>% 
+                                    dplyr::select(feature, auc) %>%
+                                    deframe()
+     
+WTFFT_WTnaive.WTFFT.MP_enterocyte.gsea <-WTFFT_WTnaive.WTFFT.MP_enterocyte.gsea[!is.na(WTFFT_WTnaive.WTFFT.MP_enterocyte.gsea)]
+     
+
+WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTFFT_WTnaive.WTFFT.MP_enterocyte.gsea)
+
+WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig <- WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes %>%
+                                                 filter(padj < 0.05) %>%
+                                                 mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig.csv")
+
+
+WTFFT_WTnaive.WTFFT.MP_enterocyte.p <- ggplot(WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                      geom_col(aes(fill= padj < 0.05)) +
+                                      coord_flip() +
+                                      scale_fill_manual(values= c("grey", "red")) + 
+                                      scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                      labs(x="", y="Normalized Enrichment Score",
+                                           title="WTFFT") + 
+                                      theme_minimal()
+
+     
+ggsave(WTFFT_WTnaive.WTFFT.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+
+#---------------------------------------WT naive------------------------------------------#
+
+
+WTnaive_WTnaive.WTFFT.MP_enterocyte.gsea <- WTnaive.WTFFT.MP_enterocyte.wilcox_test %>%
+                #filter(abs(logFC) >= 1) %>%
+                dplyr::filter(group == "WT naïve") %>%
+                arrange(desc(auc)) %>% 
+                dplyr::select(feature, auc) %>%
+                deframe()
+     
+WTnaive_WTnaive.WTFFT.MP_enterocyte.gsea <- WTnaive_WTnaive.WTFFT.MP_enterocyte.gsea[!is.na(WTnaive_WTnaive.WTFFT.MP_enterocyte.gsea)]
+     
+     
+WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTnaive_WTnaive.WTFFT.MP_enterocyte.gsea)
+WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig <- WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes %>%
+                                                     filter(padj < 0.05) %>%
+                                                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig.csv")
+
+WTnaive_WTnaive.WTFFT.MP_enterocyte.p <- ggplot(WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                            geom_col(aes(fill= padj < 0.05)) +
+                            coord_flip() +
+                            scale_fill_manual(values= c("grey", "red")) + 
+                            scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                            labs(x="", y="Normalized Enrichment Score",
+                                 title="WT naïve") + 
+                            theme_minimal()
+
+     
+ggsave(WTnaive_WTnaive.WTFFT.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+```
+
+
+
+#-----------MP enterocyte (WT naive vs Rag2-/-Il2rg-/-)-------------#
+```{r}
+
+
+epcam.Naive.Rag2.MP_enterocyte.final <- subset(epcam.final,modified.ident %in% c("Rag2-/-Il2rg-/-","WT naïve"))
+
+
+epcam.Naive.Rag2.MP_enterocyte.wilcox_test <- wilcoxauc(epcam.Naive.Rag2.MP_enterocyte.final, 'modified.ident') 
+
+
+
+#-------------------------WT naïve------------------------#
+
+
+Naive_Naive.Rag2.MP_enterocyte.gsea <- epcam.Naive.Rag2.MP_enterocyte.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "WT naïve") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+Naive_Naive.Rag2.MP_enterocyte.gsea <-Naive_Naive.Rag2.MP_enterocyte.gsea[!is.na(Naive_Naive.Rag2.MP_enterocyte.gsea)]
+     
+
+Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Naive_Naive.Rag2.MP_enterocyte.gsea)
+
+Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig <- Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
+
+
+Naive_Naive.Rag2.MP_enterocyte.p <- ggplot(Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="WT naïve") + 
+                                    theme_minimal()
+
+     
+ggsave(Naive_Naive.Rag2.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+
+
+#-------------------------Rag2-/-Il2rg-/-------------------------#
+
+
+Rag2_Naive.Rag2.MP_enterocyte.gsea <- epcam.Naive.Rag2.MP_enterocyte.wilcox_test %>%
+                                      #filter(abs(logFC) >= 1) %>%
+                                      dplyr::filter(group == "Rag2-/-Il2rg-/-") %>%
+                                      arrange(desc(auc)) %>% 
+                                      dplyr::select(feature, auc) %>%
+                                      deframe()
+     
+Rag2_Naive.Rag2.MP_enterocyte.gsea <- Rag2_Naive.Rag2.MP_enterocyte.gsea[!is.na(Rag2_Naive.Rag2.MP_enterocyte.gsea)]
+     
+     
+Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Rag2_Naive.Rag2.MP_enterocyte.gsea)
+
+Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig <- Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes %>%
+                                                     filter(padj < 0.05) %>%
+                                                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
+
+Rag2_Naive.Rag2.MP_enterocyte.p <- ggplot(Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                            geom_col(aes(fill= padj < 0.05)) +
+                            coord_flip() +
+                            scale_fill_manual(values= c("grey", "red")) + 
+                            scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                            labs(x="", y="Normalized Enrichment Score",
+                                 title="Rag2-/-Il2rg-/-") + 
+                            theme_minimal()
+
+     
+ggsave(Rag2_Naive.Rag2.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+```
+
+
+
+#-----------MP enterocyte (WTFFT vs Rag2-/-Il2rg-/-)-------------#
+```{r}
+
+epcam.WTFFT.Rag2.MP_enterocyte.final <- subset(epcam.final,modified.ident %in% c("Rag2-/-Il2rg-/-","WT + FFT"))
+
+
+epcam.WTFFT.Rag2.MP_enterocyte.wilcox_test <- wilcoxauc(epcam.WTFFT.Rag2.MP_enterocyte.final, 'modified.ident') 
+
+
+#-------------------------WT + FFT-----------------------#
+
+
+WTFFT_WTFFT.Rag2.MP_enterocyte.gsea <- epcam.WTFFT.Rag2.MP_enterocyte.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "WT + FFT") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+WTFFT_WTFFT.Rag2.MP_enterocyte.gsea <- WTFFT_WTFFT.Rag2.MP_enterocyte.gsea[!is.na(WTFFT_WTFFT.Rag2.MP_enterocyte.gsea)]
+     
+
+WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTFFT_WTFFT.Rag2.MP_enterocyte.gsea)
+
+WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig <- WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
+
+
+WTFFT_WTFFT.Rag2.MP_enterocyte.p <- ggplot(WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="WT + FFT") + 
+                                    theme_minimal()
+
+     
+ggsave(WTFFT_WTFFT.Rag2.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+
+
+#-------------------------Rag2-/-Il2rg-/-------------------------#
+
+
+Rag2_WTFFT.Rag2.MP_enterocyte.gsea <- epcam.WTFFT.Rag2.MP_enterocyte.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "Rag2-/-Il2rg-/-") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+Rag2_WTFFT.Rag2.MP_enterocyte.gsea <- Rag2_WTFFT.Rag2.MP_enterocyte.gsea[!is.na(Rag2_WTFFT.Rag2.MP_enterocyte.gsea)]
+     
+
+Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Rag2_WTFFT.Rag2.MP_enterocyte.gsea)
+
+Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig <- Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
+
+
+
+
+Rag2_WTFFT.Rag2.MP_enterocyte.p <- ggplot(Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="Rag2-/-Il2rg-/-") + 
+                                    theme_minimal()
+
+     
+ggsave(Rag2_WTFFT.Rag2.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+
+
+```
+
+
+
+
+
+#----------------------------------------------------------Goblet------------------------------------------------------#
+
+
+
+
+#-----------Goblet (WT naive vs WT+FFT)-------------#
+```{r}
+
+
+epcam.WTnaive.WTFFT.Goblet.final <- subset(epcam.Goblet.final,modified.ident %in% c("WT + FFT","WT naïve"))
+
+
+WTnaive.WTFFT.Goblet.wilcox_test <- wilcoxauc(epcam.WTnaive.WTFFT.Goblet.final, 'modified.ident') 
+
+
+#--------------------------WTFFT-------------------------------#
+
+
+WTFFT_WTnaive.WTFFT.Goblet.gsea <- WTnaive.WTFFT.Goblet.wilcox_test %>%
+                                    #filter(abs(logFC) >= 1) %>%
+                                    dplyr::filter(group == "WT + FFT") %>%
+                                    arrange(desc(auc)) %>% 
+                                    dplyr::select(feature, auc) %>%
+                                    deframe()
+     
+WTFFT_WTnaive.WTFFT.Goblet.gsea <- WTFFT_WTnaive.WTFFT.Goblet.gsea[!is.na(WTFFT_WTnaive.WTFFT.Goblet.gsea)]
+     
+
+WTFFT_WTnaive.WTFFT.Goblet.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTFFT_WTnaive.WTFFT.Goblet.gsea)
+
+WTFFT_WTnaive.WTFFT.Goblet.fgseaRes.sig <- WTFFT_WTnaive.WTFFT.Goblet.fgseaRes %>%
+                                                 filter(padj < 0.05) %>%
+                                                 mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTFFT_WTnaive.WTFFT.Goblet.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.Goblet.fgseaRes.sig.csv")
+
+
+WTFFT_WTnaive.WTFFT.Goblet.p <- ggplot(WTFFT_WTnaive.WTFFT.Goblet.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                      geom_col(aes(fill= padj < 0.05)) +
+                                      coord_flip() +
+                                      scale_fill_manual(values= c("grey", "red")) + 
+                                      scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                      labs(x="", y="Normalized Enrichment Score",
+                                           title="WTFFT") + 
+                                      theme_minimal()
+
+     
+ggsave(WTFFT_WTnaive.WTFFT.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+
+
+#---------------------------------------WT naive------------------------------------------#
+
+
+WTnaive_WTnaive.WTFFT.Goblet.gsea <- WTnaive.WTFFT.Goblet.wilcox_test %>%
+                #filter(abs(logFC) >= 1) %>%
+                dplyr::filter(group == "WT naïve") %>%
+                arrange(desc(auc)) %>% 
+                dplyr::select(feature, auc) %>%
+                deframe()
+     
+WTnaive_WTnaive.WTFFT.Goblete.gsea <- WTnaive_WTnaive.WTFFT.Goblet.gsea[!is.na(WTnaive_WTnaive.WTFFT.Goblet.gsea)]
+     
+     
+WTnaive_WTnaive.WTFFT.Goblet.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTnaive_WTnaive.WTFFT.Goblet.gsea)
+WTnaive_WTnaive.WTFFT.Goblet.fgseaRes.sig <- WTnaive_WTnaive.WTFFT.Goblet.fgseaRes %>%
+                                                     filter(padj < 0.05) %>%
+                                                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTnaive_WTnaive.WTFFT.Goblet.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.Goblet.fgseaRes.sig.csv")
+
+WTnaive_WTnaive.WTFFT.Goblet.p <- ggplot(WTnaive_WTnaive.WTFFT.Goblet.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                            geom_col(aes(fill= padj < 0.05)) +
+                            coord_flip() +
+                            scale_fill_manual(values= c("grey", "red")) + 
+                            scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                            labs(x="", y="Normalized Enrichment Score",
+                                 title="WT naïve") + 
+                            theme_minimal()
+
+     
+ggsave(WTnaive_WTnaive.WTFFT.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+
+```
+
+
+
+#-----------Goblet (WT naive vs Rag2-/-Il2rg-/-)-------------#
+```{r}
+
+
+epcam.Naive.Rag2.Goblet.final <- subset(epcam.final,modified.ident %in% c("Rag2-/-Il2rg-/-","WT naïve"))
+
+
+epcam.Naive.Rag2.Goblet.wilcox_test <- wilcoxauc(epcam.Naive.Rag2.Goblet.final, 'modified.ident') 
+
+
+
+#-------------------------WT naïve------------------------#
+
+
+Naive_Naive.Rag2.Goblet.gsea <- epcam.Naive.Rag2.Goblet.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "WT naïve") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+Naive_Naive.Rag2.Goblet.gsea <-Naive_Naive.Rag2.Goblet.gsea[!is.na(Naive_Naive.Rag2.Goblet.gsea)]
+     
+
+Naive_Naive.Rag2.Goblet.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Naive_Naive.Rag2.Goblet.gsea)
+
+Naive_Naive.Rag2.Goblet.gsea.fgseaRes.sig <- Naive_Naive.Rag2.Goblet.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Naive_Naive.Rag2.Goblet.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.Goblet.gsea.fgseaRes.sig.csv")
+
+
+Naive_Naive.Rag2.Goblet.p <- ggplot(Naive_Naive.Rag2.Goblet.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="WT naïve") + 
+                                    theme_minimal()
+
+     
+ggsave(Naive_Naive.Rag2.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+
+
+
+#-------------------------Rag2-/-Il2rg-/-------------------------#
+
+
+Rag2_Naive.Rag2.Goblet.gsea <- epcam.Naive.Rag2.Goblet.wilcox_test %>%
+                                      #filter(abs(logFC) >= 1) %>%
+                                      dplyr::filter(group == "Rag2-/-Il2rg-/-") %>%
+                                      arrange(desc(auc)) %>% 
+                                      dplyr::select(feature, auc) %>%
+                                      deframe()
+     
+Rag2_Naive.Rag2.Goblet.gsea <- Rag2_Naive.Rag2.Goblet.gsea[!is.na(Rag2_Naive.Rag2.Goblet.gsea)]
+     
+     
+Rag2_Naive.Rag2.Goblet.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Rag2_Naive.Rag2.Goblet.gsea)
+
+Rag2_Naive.Rag2.Goblet.gsea.fgseaRes.sig <- Rag2_Naive.Rag2.Goblet.gsea.fgseaRes %>%
+                                                     filter(padj < 0.05) %>%
+                                                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Rag2_Naive.Rag2.Goblet.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.Goblet.gsea.fgseaRes.sig.csv")
+
+Rag2_Naive.Rag2.Goblet.p <- ggplot(Rag2_Naive.Rag2.Goblet.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                            geom_col(aes(fill= padj < 0.05)) +
+                            coord_flip() +
+                            scale_fill_manual(values= c("grey", "red")) + 
+                            scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                            labs(x="", y="Normalized Enrichment Score",
+                                 title="Rag2-/-Il2rg-/-") + 
+                            theme_minimal()
+
+     
+ggsave(Rag2_Naive.Rag2.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+
+```
+
+
+
+#-----------Goblet (WTFFT vs Rag2-/-Il2rg-/-)-------------#
+```{r}
+
+epcam.WTFFT.Rag2.Goblet.final <- subset(epcam.final,modified.ident %in% c("Rag2-/-Il2rg-/-","WT + FFT"))
+
+
+epcam.WTFFT.Rag2.Goblet.wilcox_test <- wilcoxauc(epcam.WTFFT.Rag2.Goblet.final, 'modified.ident') 
+
+
+#-------------------------WT + FFT-----------------------#
+
+
+WTFFT_WTFFT.Rag2.Goblet.gsea <- epcam.WTFFT.Rag2.Goblet.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "WT + FFT") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+WTFFT_WTFFT.Rag2.Goblet.gsea <- WTFFT_WTFFT.Rag2.Goblet.gsea[!is.na(WTFFT_WTFFT.Rag2.Goblet.gsea)]
+     
+
+WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = WTFFT_WTFFT.Rag2.Goblet.gsea)
+
+WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig <- WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig.csv")
+
+
+WTFFT_WTFFT.Rag2.Goblet.p <- ggplot(WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="WT + FFT") + 
+                                    theme_minimal()
+
+     
+ggsave(WTFFT_WTFFT.Rag2.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+
+
+
+#-------------------------Rag2-/-Il2rg-/-------------------------#
+
+
+Rag2_WTFFT.Rag2.Goblet.gsea <- epcam.WTFFT.Rag2.Goblet.wilcox_test %>%
+                                          #filter(abs(logFC) >= 1) %>%
+                                          dplyr::filter(group == "Rag2-/-Il2rg-/-") %>%
+                                          arrange(desc(auc)) %>% 
+                                          dplyr::select(feature, auc) %>%
+                                          deframe()
+     
+Rag2_WTFFT.Rag2.Goblet.gsea <- Rag2_WTFFT.Rag2.Goblet.gsea[!is.na(Rag2_WTFFT.Rag2.Goblet.gsea)]
+     
+
+Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes <- fgseaMultilevel(h_fgsea_sets, stats = Rag2_WTFFT.Rag2.Goblet.gsea)
+
+Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig <- Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes %>%
+                     filter(padj < 0.05) %>%
+                     mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
+
+
+write.csv(Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig.csv")
+
+
+
+
+Rag2_WTFFT.Rag2.Goblet.p <- ggplot(Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
+                                    geom_col(aes(fill= padj < 0.05)) +
+                                    coord_flip() +
+                                    scale_fill_manual(values= c("grey", "red")) + 
+                                    scale_size(range=c(-11,11), breaks = seq(0.01, 0.05, 0.005)) +
+                                    labs(x="", y="Normalized Enrichment Score",
+                                         title="Rag2-/-Il2rg-/-") + 
+                                    theme_minimal()
+
+     
+ggsave(Rag2_WTFFT.Rag2.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+
+
+```
+
+
