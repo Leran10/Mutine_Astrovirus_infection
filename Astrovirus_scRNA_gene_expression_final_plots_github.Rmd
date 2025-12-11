@@ -1,5 +1,5 @@
 ---
-title: "Harshad_scRNA_gene_expression"
+title: "scRNA_gene_expression"
 ---
 title: "Harshad_scRNA_gene_expression"
 author: "Leran Wang"
@@ -12,29 +12,1159 @@ resource_files:
 - Harshad.seurat.update.h5Seurat
 ---
 
+Load packages
 ```{r setup, include=FALSE,echo=FALSE,warning=FALSE,message=FALSE}
 knitr::opts_chunk$set(echo = FALSE,message=FALSE,warning = FALSE,fig.width=12, fig.height=8)
 
 
-library(Seurat);packageVersion("Seurat")
-library(SeuratDisk);packageVersion("SeuratDisk")
-library(ggplot2);packageVersion("ggplot2")
-library(ggpubr);packageVersion("ggpubr")
-library(plotly);packageVersion("plotly")
-library(ggrepel);packageVersion("ggrepel")
-library(gridExtra);packageVersion("gridExtra")
-library("viridis") ;packageVersion("viridis")
-library('svglite');packageVersion('svglite')
-library(fgsea);packageVersion("fgsea")
-library(msigdbr);packageVersion("msigdbr")
-library(tidyverse);packageVersion("tidyverse")
+library(Seurat)
+library(SeuratObject)
 library(SeuratDisk)
-library(tidyverse)
+library(SingleR)
+library(celldex)
+
+# Data manipulation
 library(dplyr)
+library(tidyr)
+library(tibble)
 library(data.table)
+library(tidyverse)
+
+# Visualization
+library(ggplot2)
+library(ggpubr)
+library(ggbeeswarm)
+library(ggrepel)
+library(plotly)
+library(gridExtra)
+library(patchwork)
+library(scales)
+library(viridis)
+library(viridisLite)
+library(svglite)
+
+# Pathway analysis
+library(fgsea)
+library(msigdbr)
+
+# HDF5 support
+library(hdf5r)
+
+
+
 
 
 ```
+
+
+
+#################### Create Integrated Seurat Object and QC ##################
+
+
+# read in the cellranger count tables
+```{r}
+
+
+# read sample1
+peaks.BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- Read10X("~/BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1/filtered_feature_bc_matrix/")
+BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- CreateSeuratObject(counts = peaks.BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1, project = "BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1") #, min.cells = 3, min.features = 200
+BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- NormalizeData(BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1)
+BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- FindVariableFeatures(BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1, selection.method = "vst", nfeatures = 2000)
+BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- ScaleData(BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1, verbose = FALSE)
+BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- RunPCA(BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1, npcs = 30, verbose = FALSE)
+BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- RunUMAP(BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1, dims = 1:20) # reduction = "pca",
+BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- FindNeighbors(BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1, reduction = "pca", dims = 1:20)
+BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1 <- FindClusters(BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1, resolution = 0.5)
+
+
+# read sample2
+peaks.BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- Read10X("~/BAAK_Rag2Il2rg_Rag2Il2rg_lib1/filtered_feature_bc_matrix/")
+BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- CreateSeuratObject(counts = peaks.BAAK_Rag2Il2rg_Rag2Il2rg_lib1, project = "BAAK_Rag2Il2rg_Rag2Il2rg_lib1") #, min.cells = 3, min.features = 200
+BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- NormalizeData(BAAK_Rag2Il2rg_Rag2Il2rg_lib1)
+BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- FindVariableFeatures(BAAK_Rag2Il2rg_Rag2Il2rg_lib1, selection.method = "vst", nfeatures = 2000)
+
+BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- ScaleData(BAAK_Rag2Il2rg_Rag2Il2rg_lib1, verbose = FALSE)
+BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- RunPCA(BAAK_Rag2Il2rg_Rag2Il2rg_lib1, npcs = 30, verbose = FALSE)
+BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- RunUMAP(BAAK_Rag2Il2rg_Rag2Il2rg_lib1, dims = 1:20) # reduction = "pca",
+BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- FindNeighbors(BAAK_Rag2Il2rg_Rag2Il2rg_lib1, reduction = "pca", dims = 1:20)
+BAAK_Rag2Il2rg_Rag2Il2rg_lib1 <- FindClusters(BAAK_Rag2Il2rg_Rag2Il2rg_lib1, resolution = 0.5)
+
+
+# read sample3
+peaks.BAAK_WTFFT_WTFFT_lib1 <- Read10X("~/BAAK_WTFFT_WTFFT_lib1/filtered_feature_bc_matrix/")
+BAAK_WTFFT_WTFFT_lib1 <- CreateSeuratObject(counts = peaks.BAAK_WTFFT_WTFFT_lib1, project = "BAAK_WTFFT_WTFFT_lib1") #, min.cells = 3, min.features = 200
+BAAK_WTFFT_WTFFT_lib1 <- NormalizeData(BAAK_WTFFT_WTFFT_lib1)
+BAAK_WTFFT_WTFFT_lib1 <- FindVariableFeatures(BAAK_WTFFT_WTFFT_lib1, selection.method = "vst", nfeatures = 2000)
+
+BAAK_WTFFT_WTFFT_lib1 <- ScaleData(BAAK_WTFFT_WTFFT_lib1, verbose = FALSE)
+BAAK_WTFFT_WTFFT_lib1 <- RunPCA(BAAK_WTFFT_WTFFT_lib1, npcs = 30, verbose = FALSE)
+BAAK_WTFFT_WTFFT_lib1 <- RunUMAP(BAAK_WTFFT_WTFFT_lib1, dims = 1:20) # reduction = "pca",
+BAAK_WTFFT_WTFFT_lib1 <- FindNeighbors(BAAK_WTFFT_WTFFT_lib1, reduction = "pca", dims = 1:20)
+BAAK_WTFFT_WTFFT_lib1 <- FindClusters(BAAK_WTFFT_WTFFT_lib1, resolution = 0.5)
+
+
+# read sample 4
+peaks.BAAK_Wtnaive_Wtnaive_lib1 <- Read10X("~/BAAK_Wtnaive_Wtnaive_lib1/filtered_feature_bc_matrix/")
+BAAK_Wtnaive_Wtnaive_lib1 <- CreateSeuratObject(counts = peaks.BAAK_Wtnaive_Wtnaive_lib1, project = "BAAK_Wtnaive_Wtnaive_lib1") #, min.cells = 3, min.features = 200
+BAAK_Wtnaive_Wtnaive_lib1 <- NormalizeData(BAAK_Wtnaive_Wtnaive_lib1)
+BAAK_Wtnaive_Wtnaive_lib1 <- FindVariableFeatures(BAAK_Wtnaive_Wtnaive_lib1, selection.method = "vst", nfeatures = 2000)
+
+BAAK_Wtnaive_Wtnaive_lib1 <- ScaleData(BAAK_Wtnaive_Wtnaive_lib1, verbose = FALSE)
+BAAK_Wtnaive_Wtnaive_lib1 <- RunPCA(BAAK_Wtnaive_Wtnaive_lib1, npcs = 30, verbose = FALSE)
+BAAK_Wtnaive_Wtnaive_lib1<- RunUMAP(BAAK_Wtnaive_Wtnaive_lib1, dims = 1:20) # reduction = "pca",
+BAAK_Wtnaive_Wtnaive_lib1 <- FindNeighbors(BAAK_Wtnaive_Wtnaive_lib1, reduction = "pca", dims = 1:20)
+BAAK_Wtnaive_Wtnaive_lib1 <- FindClusters(BAAK_Wtnaive_Wtnaive_lib1, resolution = 0.5)
+
+```
+
+
+
+# combine the counts
+```{r}
+
+immune.anchors <- FindIntegrationAnchors(object.list = list(BAAK_Rag2Il2rgIfnlr1_Rag2Il2rgIfnlr1_lib1, 
+                                                            BAAK_Rag2Il2rg_Rag2Il2rg_lib1, 
+                                                            BAAK_WTFFT_WTFFT_lib1,
+                                                            BAAK_Wtnaive_Wtnaive_lib1), dims = 1:20)
+
+immune.anchors
+
+combined.all <- IntegrateData(anchorset = immune.anchors, dims = 1:20)
+rm(immune.anchors)
+
+Idents(combined.all) <- "modified.ident"
+
+
+
+DefaultAssay(combined.all) <- "integrated"
+combined.all <- ScaleData(combined.all, verbose = FALSE)
+combined.all <- RunPCA(combined.all, npcs = 30, verbose = FALSE)
+combined.all <- RunUMAP(combined.all, dims = 1:20) # reduction = "pca",
+combined.all <- FindNeighbors(combined.all, reduction = "pca", dims = 1:20)
+combined.all <- FindClusters(combined.all, resolution = 0.5)
+combined.all <- RunTSNE(object = combined.all)
+combined.all <- FindVariableFeatures(combined.all, selection.method = "vst", nfeatures = 2000)
+
+
+```
+
+
+# Quality Control
+```{r}
+
+# switch assay from integrated to RNA to calculate the percentation of mitocondrial and ribosomal genes
+# because PercentageFeatureSet() function apply on raw count table, not normalized table.
+
+DefaultAssay(combined.all) <- "RNA"
+combined.all <- PercentageFeatureSet(combined.all, "^mt-", col.name = "percent.mito")
+
+# calculate the proportion gene expression that comes from ribosomal proteins
+combined.all <- PercentageFeatureSet(combined.all, "^rp-", col.name = "percent.ribo")
+
+# calculate proportion hemoglobin genes, which can give an indication of red blood cell contamination
+combined.all <- PercentageFeatureSet(combined.all, "^HB[^(P)]", col.name = "percent.HB")
+
+combined.all <- PercentageFeatureSet(combined.all, "PECAM1|PF4", col.name = "percent.plat")
+
+
+# make violin plot to visualize the Quality
+VlnPlot(object = combined.all, group.by = "orig.ident",features = c("nFeature_RNA", "nCount_RNA", "percent.mito", "percent_ribo"), ncol = 3)
+
+
+# scatter plot ()
+FeatureScatter(combined.all, "nCount_RNA", "nFeature_RNA", group.by = "orig.ident", pt.size = 0.5)
+
+# perform QC - cells with at least 200 detected genes and genes need to be expressed in at least 3 cells
+# remove the cells that has less than 3 molecules detected
+selected_c <- WhichCells(combined.all, expression = nFeature_RNA > 200)
+selected_f <- rownames(combined.all)[Matrix::rowSums(combined.all) > 3]
+length(selected_c) # 31137
+length(selected_f) # 18522
+
+# subset seurat object
+combined.all.subset <- subset(combined.all, features = selected_f, cells = selected_c)
+
+```
+
+
+#################### Cell cluster annotations ##################
+
+
+# get gene expression list for each clusters
+```{r}
+
+# find gene markers
+cluster_markers <- FindAllMarkers(combined.all, only.pos = TRUE)
+
+cluster_markers.top40 <- cluster_markers %>% group_by(cluster) %>% top_n(n = 40, wt = avg_log2FC)
+View(cluster_markers.top40)
+
+#write.csv(cluster_markers.top40,"~/_V2/SCSA.cluster_markers.top40.csv")
+
+```
+
+
+# using singleR to do annoatation 
+```{r}
+
+# this singleR step has been done in HTCF cluster
+# # import reference gene
+ref.se <- ImmGenData()
+# extract count table
+counts <- GetAssayData(combined.all)
+# annotate cells
+pred.hesc <- SingleR(counts, ref = ref.se, assay.type.test=1,labels = ref.se$label.main)
+
+
+write.csv(pred.hesc,"~/singleR_cell_annotation.csv")
+
+
+
+# load the singleR annotated cell file and extract the 3 types of labels
+cell_annotation <- read.csv("~/singleR_cell_annotation.csv") %>%
+                   dplyr::select(X,first.labels,labels,pruned.labels) %>%
+                   column_to_rownames("X")
+
+
+# merge the annotation to seurat object
+combined.all <- AddMetaData(object = combined.all, metadata = data.frame(cell_annotation))
+
+# read metadata
+meta <- read.csv("~/Samplemap.csv")
+
+# modify orig.ident to a shorter version in the metadata file
+combined.all@meta.data <- combined.all@meta.data %>%
+                          mutate(modified.ident = sapply(strsplit(orig.ident,"_"),"[",2))
+
+
+SaveH5Seurat(combined.all, "~/Harshad.seurat.update.h5Seurat")
+
+
+```
+
+
+# using SCSA to do annoatation 
+# (have done this in HTCF server, so directly read in the annotation file)
+```{r}
+# I have ran SCSA on HTCF server using seurat object count table, and got the annotations 
+# Here I just need to add the SCSA annotation output result into seurat
+SCSA.annotation <- c("Natural killer cell","Enterocyte","Cluster_2","Dendritic cell","Epithelial cell","Progenitor cell","B cell","Erythroid cell","Enterocyte","Epithelial cell"," B cell","Goblet cell","Progenitor cell","Mesenchymal progenitor cell","Dendritic cell","Epithelial cell","Tuft_Cell_SCSA","Tuft cell","Microglial cell","Monocyte","Natural killer cell","Enteroendocrine cell","Tuft cell","Erythroid cell")
+
+
+# match the new clusters and old cluster IDs
+names(SCSA.annotation) <- levels(combined.all)
+
+# replace the Idents of the seurat object to the new cluster names
+combined.all <- RenameIdents(combined.all, SCSA.annotation)
+
+# add a column to save the SCSA cluster names
+combined.all[["SCSA.cell.label"]] <- Idents(combined.all)
+
+#rename column name "labels" to "singleR.cell.label" just to distinguish between singleR and SCSA
+combined.all@meta.data <- combined.all@meta.data %>%
+                          dplyr::rename("singleR.cell.label" = "labels")
+
+combined.all@meta.data <- combined.all@meta.data %>%
+                          mutate("cellID" = rownames(combined.all@meta.data))
+
+# # create a cell annotation comparison table for singleR and SCSA
+# annotation.comparison <- combined.all@meta.data %>%
+#                          select(seurat_clusters,labels,SCSA.cell.label) %>%
+#                          dplyr::rename("singleR.cell.label" = "labels") %>%
+#                          distinct(seurat_clusters,.keep_all = TRUE) %>%
+#                          arrange(seurat_clusters) %>%
+#                          rownames_to_column("remove") %>%
+#                          select(-remove)
+# 
+# write.csv(annotation.comparison,"~/_V2/annotation.comparison.csv")
+
+
+```
+
+
+# tSNE plot for all and for per sample
+```{r}
+
+# tsne plot by clusters
+p1.SCSA <- DimPlot(combined.all, reduction = "tsne",group.by = "SCSA.cell.label",label = TRUE,repel = TRUE)
+p1.singleR <- DimPlot(combined.all, reduction = "tsne",group.by = "singleR.cell.label",label = TRUE,repel = TRUE)
+
+# tsne plot by clusters and split by samples
+p2.SCSA <- DimPlot(combined.all, reduction = "tsne", split.by = "modified.ident",group.by = "SCSA.cell.label",label = TRUE,repel = TRUE)
+p2.singleR <- DimPlot(combined.all, reduction = "tsne", split.by = "modified.ident",group.by = "singleR.cell.label",label = TRUE,repel = TRUE)
+
+
+```
+
+
+# Identify conserved cell type markers
+# Note: RNA assay is suggested to be used for gene expression visualization instead of integrated assay.
+To identify canonical cell type marker genes that are conserved across conditions, we provide the FindConservedMarkers function. This function performs differential gene expression testing for each dataset/group and combines the p-values using meta-analysis methods from the MetaDE R package. For example, we can calculated the genes that are conserved markers irrespective of stimulation condition in cluster 7 (NK cells).
+
+
+# gene expression of EPCAM+ clusters and Ptprc(CD45)+ clusters
+```{r}
+
+DefaultAssay(combined.all) <- "RNA"
+
+Idents(combined.all) <- "seurat_clusters"
+
+# get the row of Epcam from the count table
+Epcam_expression = GetAssayData(object = combined.all, 
+assay = "RNA", slot = "data")[c("Epcam"),]
+
+
+# extract cell IDs with Epcam expressed and non-expressed respectively
+Epcam_pos_ID <- names(which(Epcam_expression > 0))
+Epcam_neg_ID <- names(which(Epcam_expression == 0))
+
+
+subset.Epcam.pos <- subset(x = combined.all, subset = cellID %in% Epcam_pos_ID)
+subset.Epcam.neg <- subset(x = combined.all, subset = cellID %in% Epcam_neg_ID)
+
+# check what clusters have Epcam expressed (no matter what levels)
+unique(subset.Epcam.pos$seurat_clusters)
+# 11 5  1  14 2  9  12 15 8  4  7  18 22 21 17 3  13 19 0  10 6  20 16 23
+
+
+# check what clusters don't have any Epcam expressed
+unique(subset.Epcam.neg$seurat_clusters)
+# 11 5  1  14 2  9  12 15 8  4  7  18 22 21 17 3  13 19 0  10 6  20 16 23
+
+
+Idents(combined.all) <- "seurat_clusters"
+
+
+# check 
+# markers <- FindAllMarkers(combined.all, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+
+epcam.positive.significant.markers <- markers %>% 
+                  mutate(cluster = as.character(cluster)) %>% 
+                  filter(cluster %in% c("4","5","8","9","12","15","21","22","1","2", "11","17","19","20")) %>%
+                  filter(p_val_adj < 0.05)
+
+write.csv(epcam.positive.significant.markers,"~/epcam.positive.csv")
+
+# After closely looking at the epcam.positive clusters, we decide to put cluster 19 and 20 in Ptprc.positive clusters to double check
+
+Ptprc.positive.significant.markers <- markers %>% 
+                                      mutate(cluster = as.character(cluster)) %>% 
+                                      filter(cluster %in% c("0","3","6","7","10","13","14","16","18","19","20","23")) #%>%
+                                      #filter(p_val_adj < 0.05)
+
+write.csv(Ptprc.positive.significant.markers,"~/Ptprc.positive.SCSA.csv", quote = FALSE)
+
+
+
+```
+
+
+# We tried to fit Ptprc.positive.significant.markers file in Immgen() but didn't get reasonal results.
+# So we decided to use this Ptprc.positive.significant.markers count table into SCSA to get annotation.
+```{r}
+
+# ============SCSA cell annotation results==============#
+
+# 0: T cell
+# 3: B cell
+# 6: T cell
+# 7: Erythroid vell
+# 10: B cell
+# 13: Mesenchymal progenitor cell
+# 14: Macrophage
+# 16: T cell
+# 18: Tuft
+# 19: Endothelial cell
+# 20: Natural killer cell
+# 23: Erythoid cell
+
+# ===============detailed description===================#
+
+#'0'	 '?'	   'T cell|Natural killer cell'	 '7.471243767448992|4.199069018832573'	 1.7792619587677436
+#'3'	 '?'	   'B cell|Dendritic cell'	 '6.9548801320484674|4.731442557390721'	 1.4699280499949514	
+#'6'	 'Good'	 'T cell'	6.722779429	 2.804368574942374	
+#'7'	 'Good'	 'Erythroid cell'	2.089385916	 2.7928046046517543	
+#'10'	 '?'	   'B cell|T cell'	 '3.6514959077569276|2.8948371706226874'	 1.261382140872359	
+#'13'	 '?'	   'Mesenchymal progenitor cell|Cycling basal cell'	 '2.67221080177102|2.13174821681453'	 1.2535302155730677	
+#'14'	 '?'	   'Macrophage|Monocyte'	 '4.7402370056840955|4.4261083401572705'	 1.0709717524708542	
+#'16'	 'Good'	 'T cell'	6.815647003	 4.121384473145032	
+#'18'	 '?'	   'Brush cell (Tuft cell)|Mesenchymal stem cell'	 '4.93213134744888|3.4426766417822905'	 1.4326443812903358	
+#'19'	 '?'	   'Endothelial cell|Monocyte'	 '5.571922900802249|4.328543357730895'	 1.287251262217495	
+#'20'	 'Good'	 'Natural killer cell'	2.666654561	 8.11023976796517	
+#'23'	 'Good'	 'Erythroid cell'	2.885465947	 3.2353444645950566
+
+
+Ptprc.positive.SCSA.annotation <- c("T cell","B cell","T cell","Erythroid cell","B cell","Mesenchymal progenitor cell","Macrophage","T cell",
+                                    "Tuft_Cell_SCSA","Endothelial cell","Natural killer cell","Erythroid cell")
+
+
+```
+
+
+# tSNE plot for Ptprc/EPCAM/STL1/STL5 expression in each cluster all and per-sample (use clusterID)
+```{r}
+library(data.table)
+# check if the genes that we are interested in are in this dataset, and if the gene names we are using is correct
+rownames(x = combined.all)[rownames(x = combined.all) %like% "Epcam"]
+rownames(x = combined.all)[rownames(x = combined.all) %like% "Ptprc"]
+rownames(x = combined.all)[rownames(x = combined.all) %like% "Murine-astrovirus-STL1"]
+rownames(x = combined.all)[rownames(x = combined.all) %like% "Murine-astrovirus-STL5"]
+rownames(x = combined.all)[rownames(x = combined.all) %like% "Ifnlr1"]
+rownames(x = combined.all)[rownames(x = combined.all) %like% "Ang4"]
+rownames(x = combined.all)[rownames(x = combined.all) %like% "Lyz1"]
+rownames(x = combined.all)[rownames(x = combined.all) %like% "Defa24"]
+
+
+Idents(combined.all) <- "seurat_clusters"
+
+# We have to set the color for every gene, because their expression levels
+# can be different. When expression level exceeded the upper range of the linits,
+# the dots will become gray color.
+fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,6))
+
+
+# -------------- Epcam -----------------#  
+# all together
+Epcam.feature.all.plot <- FeaturePlot(combined.all, features = c("Epcam"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+
+Epcam.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,6))
+
+Epcam.feature.all.final <- lapply(Epcam.feature.all.plot, function (x) x + Epcam.fix.sc)
+Epcam.feature.all.final
+
+
+ggsave(plot = Epcam.feature.all.final[[1]],file = "~/plots_prepare/Epcam.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+Epcam.feature.per.sample.plot <- FeaturePlot(combined.all, features = "Epcam", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Epcam.feature.per.sample.final <- CombinePlots(lapply(Epcam.feature.per.sample.plot, function (x) x + Epcam.fix.sc))
+
+ggsave(plot = Epcam.feature.per.sample.final,file = "~/plots_prepare/Epcam.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+
+# ---------------Ptprc-------------------#
+Ptprc.feature.all.plot <- FeaturePlot(combined.all, features = c("Ptprc"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+
+Ptprc.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,5))
+
+Ptprc.feature.all.final <- lapply(Ptprc.feature.all.plot, function (x) x + Ptprc.fix.sc)
+Ptprc.feature.all.final
+
+ggsave(plot = Ptprc.feature.all.final[[1]],file = "~/plots_prepare/Ptprc.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+Ptprc.feature.per.sample.plot <- FeaturePlot(combined.all, features = "Ptprc", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Ptprc.feature.per.sample.final <- CombinePlots(lapply(Ptprc.feature.per.sample.plot, function (x) x + Ptprc.fix.sc))
+
+ggsave(plot = Ptprc.feature.per.sample.final,file = "~/plots_prepare/Ptprc.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+# ---------------STL1-------------------#
+STL1.feature.all.plot <- FeaturePlot(combined.all, features = c("Murine-astrovirus-STL1"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+STL1.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,8.5))
+STL1.feature.all.final <- lapply(STL1.feature.all.plot, function (x) x + STL1.fix.sc)
+STL1.feature.all.final
+
+ggsave(plot = STL1.feature.all.final[[1]],file = "~/plots_prepare/STL1.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+STL1.feature.per.sample.plot <- FeaturePlot(combined.all, features = "Murine-astrovirus-STL1", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+STL1.feature.per.sample.final <- CombinePlots(lapply(STL1.feature.per.sample.plot, function (x) x + STL1.fix.sc))
+
+ggsave(plot = STL1.feature.per.sample.final,file = "~/plots_prepare/STL1.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+# ---------------STL5-------------------#
+STL5.feature.all.plot <- FeaturePlot(combined.all, features = c("Murine-astrovirus-STL5"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+STL5.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,7))
+STL5.feature.all.final <- lapply(STL5.feature.all.plot, function (x) x + STL5.fix.sc)
+STL5.feature.all.final
+
+ggsave(plot = STL5.feature.all.final[[1]],file = "~/plots_prepare/STL5.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+STL5.feature.per.sample.plot <- FeaturePlot(combined.all, features = "Murine-astrovirus-STL5", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+STL5.feature.per.sample.final <- CombinePlots(lapply(STL5.feature.per.sample.plot, function (x) x + STL5.fix.sc))
+
+ggsave(plot = STL5.feature.per.sample.final,file = "~/plots_prepare/STL5.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+#------------------Ifnlr1-----------------------#
+
+Ifnlr1.feature.all.plot <- FeaturePlot(combined.all, features = c("Ifnlr1"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Ifnlr1.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,4))
+Ifnlr1.feature.all.final <- lapply(Ifnlr1.feature.all.plot, function (x) x + Ifnlr1.fix.sc)
+
+ggsave(plot = Ifnlr1.feature.all.final[[1]],file = "~/plots_prepare/Ifnlr1.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+Ifnlr1.feature.per.sample.plot <- FeaturePlot(combined.all, features = "Ifnlr1", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Ifnlr1.feature.per.sample.final <- CombinePlots(lapply(Ifnlr1.feature.per.sample.plot, function (x) x + Ifnlr1.fix.sc))
+
+ggsave(plot = Ifnlr1.feature.per.sample.final,file = "~/plots_prepare/Ifnlr1.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+#-----------------Ifit1------------------------#
+
+Ifit1.feature.all.plot <- FeaturePlot(combined.all, features = c("Ifit1"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Ifit1.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,5.5))
+Ifit1.feature.all.final <- lapply(Ifit1.feature.all.plot, function (x) x + Ifit1.fix.sc)
+Ifit1.feature.all.final
+
+ggsave(plot = Ifit1.feature.all.final[[1]],file = "~/plots_prepare/Ifit1.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+Ifit1.feature.per.sample.plot <- FeaturePlot(combined.all, features = "Ifit1", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Ifit1.feature.per.sample.final <- CombinePlots(lapply(Ifit1.feature.per.sample.plot, function (x) x + Ifit1.fix.sc))
+
+ggsave(plot = Ifit1.feature.per.sample.final,file = "~/plots_prepare/Ifit1.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+#-------------------Mavs-----------------------#
+
+Mavs.feature.all.plot <- FeaturePlot(combined.all, features = c("Mavs"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Mavs.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,4))
+Mavs.feature.all.final <- lapply(Mavs.feature.all.plot, function (x) x + Mavs.fix.sc)
+Mavs.feature.all.final
+
+ggsave(plot = Mavs.feature.all.final[[1]],file = "~/plots_prepare/Mavs.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+Mavs.feature.per.sample.plot <- FeaturePlot(combined.all, features = "Mavs", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Mavs.feature.per.sample.final <- CombinePlots(lapply(Mavs.feature.per.sample.plot, function (x) x + Mavs.fix.sc))
+
+ggsave(plot = Mavs.feature.per.sample.final,file = "~/plots_prepare/Mavs.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+```
+
+
+# take just cluster 11 and look at Muc2 and Lyz1 and Ang4 expression? This may help us separate the goblet and Paneth cells in this cluster
+
+# Muc2, Lyz1, Ang4, Fcgbp, Tff3, Zg16, Defa24
+```{r}
+
+# extract cluster 11
+subset.cluster11 <- subset(combined.all,subset = seurat_clusters == "11")
+
+
+# -------------- Muc2 -----------------#  
+# all together
+cluster11.Muc2.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Muc2"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Muc2.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,7))
+cluster11.Muc2.feature.all.final <- lapply(cluster11.Muc2.feature.all.plot, function (x) x + Muc2.fix.sc)
+cluster11.Muc2.feature.all.final
+
+ggsave(plot = cluster11.Muc2.feature.all.final[[1]],file = "~/plots_prepare/cluster11.Muc2.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.Muc2.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Muc2", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.Muc2.feature.per.sample.final <- CombinePlots(lapply(cluster11.Muc2.feature.per.sample.plot, function (x) x + Muc2.fix.sc))
+
+ggsave(plot = cluster11.Muc2.feature.per.sample.final,file = "~/plots_prepare/cluster11.Muc2.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+# -------------- Lyz1 -----------------#  
+# all together
+cluster11.Lyz1.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Lyz1"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Lyz1.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,7))
+cluster11.Lyz1.feature.all.final <- lapply(cluster11.Lyz1.feature.all.plot, function (x) x + Lyz1.fix.sc)
+cluster11.Lyz1.feature.all.final
+
+ggsave(plot = cluster11.Lyz1.feature.all.final[[1]],file = "~/plots_prepare/cluster11.Lyz1.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.Lyz1.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Lyz1", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.Lyz1.feature.per.sample.final <- CombinePlots(lapply(cluster11.Lyz1.feature.per.sample.plot, function (x) x + Lyz1.fix.sc))
+
+ggsave(plot = cluster11.Lyz1.feature.per.sample.final,file = "~/plots_prepare/cluster11.Lyz1.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+#----------------Ang4--------------------#
+# all together
+cluster11.Ang4.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Ang4"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Ang4.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,6))
+cluster11.Ang4.feature.all.final <- lapply(cluster11.Ang4.feature.all.plot, function (x) x + Ang4.fix.sc)
+cluster11.Ang4.feature.all.final
+
+ggsave(plot = cluster11.Ang4.feature.all.final[[1]],file = "~/plots_prepare/cluster11.Ang4.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.Ang4.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Ang4", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.Ang4.feature.per.sample.final <- CombinePlots(lapply(cluster11.Ang4.feature.per.sample.plot, function (x) x + Ang4.fix.sc))
+
+ggsave(plot = cluster11.Ang4.feature.per.sample.final,file = "~/plots_prepare/cluster11.Ang4.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+
+#------------------Fcgbp-------------------#
+# all together
+cluster11.Fcgbp.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Fcgbp"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Fcgbp.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,8))
+cluster11.Fcgbp.feature.all.final <- lapply(cluster11.Fcgbp.feature.all.plot, function (x) x + Fcgbp.fix.sc)
+
+ggsave(plot = cluster11.Fcgbp.feature.all.final[[1]],file = "~/plots_prepare/cluster11.Fcgbp.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.Fcgbp.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Fcgbp", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.Fcgbp.feature.per.sample.final <- CombinePlots(lapply(cluster11.Fcgbp.feature.per.sample.plot, function (x) x + Fcgbp.fix.sc))
+
+ggsave(plot = cluster11.Fcgbp.feature.per.sample.final,file = "~/plots_prepare/cluster11.Fcgbp.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+cluster11.Fcgbp.feature.per.sample.plot
+#------------------Tff3--------------------#
+
+# all together
+cluster11.Tff3.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Tff3"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Tff3.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,8))
+cluster11.Tff3.feature.all.final <- lapply(cluster11.Tff3.feature.all.plot, function (x) x + Tff3.fix.sc)
+cluster11.Tff3.feature.all.final
+
+ggsave(plot = cluster11.Tff3.feature.all.final[[1]],file = "~/plots_prepare/cluster11.Tff3.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.Tff3.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Tff3", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.Tff3.feature.per.sample.final <- CombinePlots(lapply(cluster11.Tff3.feature.per.sample.plot, function (x) x + Tff3.fix.sc))
+
+ggsave(plot = cluster11.Tff3.feature.per.sample.final,file = "~/plots_prepare/cluster11.Tff3.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+#-----------------Zg16--------------------#
+
+# all together
+cluster11.Zg16.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Zg16"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Zg16.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,9))
+cluster11.Zg16.feature.all.final <- lapply(cluster11.Zg16.feature.all.plot, function (x) x + Zg16.fix.sc)
+
+ggsave(plot = cluster11.Zg16.feature.all.final[[1]],file = "~/plots_prepare/cluster11.Zg16.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.Zg16.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Zg16", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.Zg16.feature.per.sample.final <- CombinePlots(lapply(cluster11.Zg16.feature.per.sample.plot, function (x) x + Zg16.fix.sc))
+
+ggsave(plot = cluster11.Zg16.feature.per.sample.final,file = "~/plots_prepare/cluster11.Zg16.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+
+#-----------------Defa24----------------------#
+
+# all together
+cluster11.Defa24.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Defa24"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+Defa24.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,8.5))
+cluster11.Defa24.feature.all.final <- lapply(cluster11.Defa24.feature.all.plot, function (x) x + Defa24.fix.sc)
+cluster11.Defa24.feature.all.final
+
+ggsave(plot = cluster11.Defa24.feature.all.final[[1]],file = "~/plots_prepare/cluster11.Defa24.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.Defa24.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Defa24", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.Defa24.feature.per.sample.final <- CombinePlots(lapply(cluster11.Defa24.feature.per.sample.plot, function (x) x + Defa24.fix.sc))
+
+ggsave(plot = cluster11.Defa24.feature.per.sample.final,file = "~/plots_prepare/cluster11.Defa24.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+```
+
+
+# We want to check STL1 and STL5 in cluster 11 as well, it would be great to know if “canonical” or “non-canonical” goblet cells are getting infected!
+```{r}
+
+
+# -------------- STL1 -----------------#  
+# all together
+cluster11.STL1.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Murine-astrovirus-STL1"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+STL1.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,7))
+cluster11.STL1.feature.all.final <- lapply(cluster11.STL1.feature.all.plot, function (x) x + STL1.fix.sc)
+cluster11.STL1.feature.all.final
+
+ggsave(plot = cluster11.STL1.feature.all.final[[1]],file = "~/plots_prepare/cluster11.STL1.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.STL1.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Murine-astrovirus-STL1", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.STL1.feature.per.sample.final <- CombinePlots(lapply(cluster11.STL1.feature.per.sample.plot, function (x) x + STL1.fix.sc))
+cluster11.STL1.feature.per.sample.final
+ggsave(plot = cluster11.STL1.feature.per.sample.final,file = "~/plots_prepare/cluster11.STL1.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+# -------------- STL5 -----------------#  
+# all together
+cluster11.STL5.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Murine-astrovirus-STL5"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+STL5.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(0,7))
+cluster11.STL5.feature.all.final <- lapply(cluster11.STL5.feature.all.plot, function (x) x + STL5.fix.sc)
+cluster11.STL5.feature.all.final
+
+ggsave(plot = cluster11.STL5.feature.all.final[[1]],file = "~/plots_prepare/cluster11.STL5.all.samples.ClusterID.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+# per samples
+cluster11.STL5.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Murine-astrovirus-STL5", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+cluster11.STL5.feature.per.sample.final <- CombinePlots(lapply(cluster11.STL5.feature.per.sample.plot, function (x) x + STL5.fix.sc))
+cluster11.STL5.feature.per.sample.final
+ggsave(plot = cluster11.STL5.feature.per.sample.final,file = "~/plots_prepare/cluster11.STL5.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+```
+
+
+# further identify cluster 11
+# Method 1
+
+# We can see that 
+# method1: extract all the cells that have 11 < TSNE-1 < 22 and TSNE-2 30 < scores < 40 (based on the tsne plot)
+```{r}
+
+# method 1:
+
+# Pull tsne1,2 scores for cells in cluster 11
+# then filter out the cells based on RSNE scores
+new.cluster24.ID <- FetchData(subset.cluster11, vars = c("tSNE_1", "tSNE_2", "sample", "ident")) %>%
+                          filter((tSNE_1 > 11 & tSNE_1 < 22) & (tSNE_2 >30 & tSNE_2 < 40)) %>%
+                          rownames(.)
+
+combined.all@meta.data <- combined.all@meta.data %>%
+                          mutate(cell.ID = row.names(.)) %>%
+                          mutate(seurat_clusters = as.character(seurat_clusters)) %>%
+                          mutate(seurat_clusters_updated = ifelse(cell.ID %in% new.cluster24.ID,"24",seurat_clusters))
+
+
+# make tsne plot (based on cluster ID)
+p1.clusterID <- DimPlot(combined.all, reduction = "tsne",group.by = "seurat_clusters_updated",label = TRUE,repel = TRUE)
+p1.clusterID
+
+
+# Cell annotations for Epithelial cell based on biomarkers
+
+# Cluster 1: Enterocyte mature proximal
+# Cluster 2: Not sure (Epithelial cell)
+# Cluster 4: Enterocyte progenitor/immature
+# Cluster 5: Stem/TA
+# Cluster 8: Enterocyte proximal
+# Cluster 9: Enterocyte distal
+# Cluster 11: Peneth cell
+# Cluster 12: Enterocyte immature distal
+# Cluster 15: Enterocytes
+# Cluster 17: Top hits present across multiple clusters
+# Cluster 19: Other  (try CD45)
+# Cluster 20: CD8 T cells (try CD45)
+# Cluster 21: EEC
+# Cluster 22: Tuft
+# Cluster 24: Goblet
+
+```
+
+
+
+# Method 2
+# we want to apply seurat on only cluster 11 and see if it can make more clusters
+```{r}
+
+DefaultAssay(subset.cluster11) <- "integrated"
+
+
+# recluster cluster11
+subset.cluster11 <- RunPCA(subset.cluster11, npcs = 30, verbose = FALSE)
+subset.cluster11 <- RunUMAP(subset.cluster11, dims = 1:20) # reduction = "pca",
+subset.cluster11 <- FindNeighbors(subset.cluster11, reduction = "pca", dims = 1:20)
+subset.cluster11 <- FindClusters(subset.cluster11, resolution = 0.5)
+subset.cluster11 <- RunTSNE(object = subset.cluster11)
+
+
+# tsne plots
+p.tsne <- DimPlot(subset.cluster11, reduction = "tsne",group.by = "seurat_clusters",label = TRUE,repel = TRUE)
+
+# get the gene expression for each sub cluster of cluster11
+cluster_11_markers <- FindAllMarkers(subset.cluster11, only.pos = TRUE)
+
+cluster_11_markers.top40 <- cluster_11_markers %>% group_by(cluster) %>% top_n(n = 40, wt = avg_log2FC) %>% filter(p_val_adj < 0.05)
+
+write.csv(cluster_11_markers.top40,"~/cluster_11_markers.top40.csv")
+
+
+
+# From Megan's Email:
+# For the sub-clusters of cluster 11, it looks like there are Paneth cells (cluster 2), canonical goblet cells (clusters 1 and 5), goblet/mature enterocyte mixed (clusters 0 and 4), and stromal cells (cluster 3).
+
+# cluster 11 cell annotations from Megan
+cluster11.annotation <- c("goblet/mature enterocyte mixed","canonical goblet cells","Paneth cells","stromal cells","goblet/mature enterocyte mixed","canonical goblet cells")
+
+# match the new clusters and old cluster IDs
+names(cluster11.annotation) <- levels(subset.cluster11)
+
+# replace the Idents of the seurat object to the new cluster names
+subset.cluster11 <- RenameIdents(subset.cluster11, cluster11.annotation)
+
+
+# add a column to save the SCSA cluster names
+subset.cluster11[["cluster11.annotation"]] <- Idents(subset.cluster11)
+
+```
+
+
+# check STL1/STL5 expression levels in each sub-clusters in cluster11
+```{r}
+
+
+# -------------- STL1 -----------------#  
+# all together
+subcluster11.STL1.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Murine-astrovirus-STL1"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+subcluster11.STL1.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(-2.5,8))
+subcluster11.STL1.feature.all.final <- lapply(subcluster11.STL1.feature.all.plot, function (x) x + subcluster11.STL1.fix.sc)
+subcluster11.STL1.feature.all.final
+
+ggsave(plot = subcluster11.STL1.feature.all.final[[1]],file = "~/plots_prepare/cluster11.STL1.all.samples.SubClusterName.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+
+# per samples
+subcluster11.STL1.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Murine-astrovirus-STL1", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+subcluster11.STL1.feature.per.sample.final <- CombinePlots(lapply(subcluster11.STL1.feature.per.sample.plot, function (x) x + subcluster11.STL1.fix.sc))
+subcluster11.STL1.feature.per.sample.final
+ggsave(plot = subcluster11.STL1.feature.per.sample.final,file = "~/plots_prepare/subcluster11.STL1.per.sample.ClusterName.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+
+# -------------- STL5 -----------------#  
+# all together
+subcluster11.STL5.feature.all.plot <- FeaturePlot(subset.cluster11, features = c("Murine-astrovirus-STL5"), cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+subcluster11.STL5.fix.sc <- scale_color_gradientn(colours = c("#F9F4F4","#0F04F7"),limits = c(-2.5,8))
+subcluster11.STL5.feature.all.final <- lapply(subcluster11.STL5.feature.all.plot, function (x) x + subcluster11.STL5.fix.sc)
+subcluster11.STL5.feature.all.final
+
+ggsave(plot = subcluster11.STL5.feature.all.final[[1]],file = "~/plots_prepare/subcluster11.STL5.all.samples.SubClusterName.tsne.pdf", width = 6, height = 6, dpi = 600)
+
+
+# per samples
+subcluster11.STL5.feature.per.sample.plot <- FeaturePlot(subset.cluster11, features = "Murine-astrovirus-STL5", split.by = "modified.ident", cols = c( "#F9F4F4","#0F04F7"),reduction = "tsne",combine = FALSE,order = TRUE,label = TRUE,repel = TRUE) 
+subcluster11.STL5.feature.per.sample.final <- CombinePlots(lapply(subcluster11.STL5.feature.per.sample.plot, function (x) x + subcluster11.STL5.fix.sc))
+subcluster11.STL5.feature.per.sample.final
+ggsave(plot = subcluster11.STL5.feature.per.sample.final,file = "~/plots_prepare/subcluster11.STL5.per.sample.ClusterID.tsne.pdf", width = 12, height = 10, dpi = 600)
+
+
+
+
+```
+
+
+# Add cell annotations for the epcam positive clusters
+```{r}
+
+# add subclusters of cluster 11 to the main clusters
+
+## main clusters
+# 1:Enterocyte Mature Proximal
+# 2:Enterocyte Progenitor Late/Paneth
+# 4:Enterocyte Distal
+# 5:Transit-Amplifying/Stem/Early Progenitors
+# 8:Enterocyte Mature Proximal
+# 9:Enterocyte Mature Distal
+# 11:Goblet/Paneth
+# 12:	Enterocyte Immature Distal
+# 15:	Enterocyte Immature Proximal
+# 17:	Enterocyte Progenitor Early
+# 21:	Entero-endocrine
+# 22: Tuft
+# 19:	Stromal Cells
+# 20: CD8+ T cells (IEL)
+												
+## cluster 11
+# 0:Goblet/Enterocyte
+# 1:Goblet
+# 2:Paneth
+# 3:Stromal
+# 4:Goblet/Enterocyte	
+# 5:Goblet
+
+# step1: find sub cluster 2 and sub cluster 3 of cluster 11
+Idents(combined.all) <- "seurat_clusters"
+subset.cluster11.subcluster2 <- subset(subset.cluster11,subset = seurat_clusters == "2")
+subset.cluster11.subcluster2.ID <- FetchData(subset.cluster11.subcluster2, vars = c("cellID")) %>%
+                                   deframe()
+
+
+subset.cluster11.subcluster3 <- subset(subset.cluster11,subset = seurat_clusters == "3")
+subset.cluster11.subcluster3.ID <- FetchData(subset.cluster11.subcluster3, vars = c("cellID")) %>%
+                                   deframe()
+
+#  rename them as cluster 24 and cluster 25 of the entire clustering
+combined.all@meta.data <- combined.all@meta.data %>%
+                          mutate(cell.ID = row.names(.)) %>%
+                          mutate(seurat_clusters = as.character(seurat_clusters)) %>%
+                          mutate(seurat_clusters_updated = ifelse(cell.ID %in% subset.cluster11.subcluster2.ID,"24",ifelse(cell.ID %in% subset.cluster11.subcluster3.ID,"25",seurat_clusters)))
+
+#----final cluster annotation for epcam positive cells-----#
+
+# 1:Enterocyte Mature Proximal
+# 2:Enterocyte Progenitor Late/Paneth
+# 4:Enterocyte Distal
+# 5:Transit-Amplifying/Stem/Early Progenitors
+# 8:Enterocyte Mature Proximal
+# 9:Enterocyte Mature Distal
+# 11:Goblet/Paneth
+# 12:	Enterocyte Immature Distal
+# 15:	Enterocyte Immature Proximal
+# 17:	Enterocyte Progenitor Early
+# 21:	Entero-endocrine
+# 22: Tuft
+# 19:	Stromal Cells
+# 20: CD8+ T cells (IEL)
+
+#----final cluster annotation for ptprc positive cells-----#
+
+# 0: T cell
+# 3: B cell
+# 6: T cell
+# 7: Erythroid vell
+# 10: B cell
+# 13: Mesenchymal progenitor cell
+# 14: Macrophage
+# 16: T cell
+# 18: Tuft
+# 19: Endothelial cell
+# 20: Natural killer cell
+# 23: Erythoid cell
+# 24: Paneth
+# 25: Stromal
+
+
+# add annotations for each cluster
+epcam.positive.annotations_custom <- c("Enterocyte Mature Proximal","Enterocyte Progenitor Late/Paneth","Enterocyte Distal","Transit-Amplifying/Stem/Early Progenitors",	"Enterocyte Mature Proximal","Enterocyte Mature Distal","Goblet/Paneth","Enterocyte Immature Distal","Enterocyte Immature Proximal","Enterocyte Progenitor Early","Entero-endocrine","Tuft","Stromal Cells","CD8+ T cells (IEL)")
+
+
+# I labeled the cells based how they were annotated
+combined.all@meta.data <- combined.all@meta.data %>%
+                          mutate(custom.cell.annotation = ifelse(seurat_clusters_updated == 1,"Enterocyte Mature Proximal_MH",ifelse(seurat_clusters_updated == 2,"Enterocyte Progenitor Late/Paneth_MH", ifelse(seurat_clusters_updated == 4,"Enterocyte Distal_MH",ifelse(seurat_clusters_updated == 5,"Transit-Amplifying/Stem/Early Progenitors_MH",ifelse(seurat_clusters_updated == 8,"Enterocyte Mature Proximal_MH",ifelse(seurat_clusters_updated == 9,"Enterocyte Mature Distal_MH", ifelse(seurat_clusters_updated == 11,"Goblet_MH", ifelse(seurat_clusters_updated == 12,"Enterocyte Immature Distal_MH",ifelse(seurat_clusters_updated == 15,"Enterocyte Immature Proximal_MH",ifelse(seurat_clusters_updated == 17,"Enterocyte Progenitor Early_MH",ifelse(seurat_clusters_updated == 21,"Entero-endocrine_MH",ifelse(seurat_clusters_updated == 22,"Tuft_MH",ifelse(seurat_clusters_updated == 19,"Stromal Cells_MH",ifelse(seurat_clusters_updated == 20,"CD8+ T cells (IEL)_MH",ifelse(seurat_clusters_updated == 24,"Paneth_MH",ifelse(seurat_clusters_updated == 25,"Stromal_MH",ifelse(seurat_clusters_updated == 0,"T cell_SCSA", ifelse(seurat_clusters_updated == 3,"B cell_SCSA",ifelse(seurat_clusters_updated == 6,"T cell_SCSA",ifelse(seurat_clusters_updated == 7,"Erythoid cell_SCSA",ifelse(seurat_clusters_updated == 10,"B cell_SCSA",ifelse(seurat_clusters_updated == 13, "Mesenchymal Progenitor Cell_SCSA",ifelse(seurat_clusters_updated == 14,"Macrophage_SCSA",ifelse(seurat_clusters_updated == 16,"T cell_SCSA", ifelse(seurat_clusters_updated == 18,"Tuft_SCSA", ifelse(seurat_clusters_updated == 23,"Erythroid cell_SCSA",seurat_clusters)))))))))))))))))))))))))))
+
+
+# save the annotated seurat object
+SaveH5Seurat(combined.all, "~/combined.all.annotated.final", overwrite = FALSE, verbose = TRUE)
+
+
+# this version has two tuft cell annotations so let's read it into R and correct it
+combined.all.annotated <- LoadH5Seurat("~/combined.all.annotated.h5seurat")
+
+
+# extract epcam positive clusters and save as a seurat object
+combined.all.epcam <- subset(combined.all,idents = c("1","2","4","5","8","9","11","12","15","17","21","22","19","20"))
+SaveH5Seurat(combined.all.epcam, "~/epcam.annotated.final", overwrite = FALSE, verbose = TRUE)
+
+
+# extract ptprc positive clusters and save as a seurat object
+combined.all.CD45 <- subset(combined.all,idents = c("14","7","18","3","24","13","25","0","16","6","10","23"))
+SaveH5Seurat(combined.all.CD45, "~/CD45.annotated.final", overwrite = FALSE, verbose = TRUE)
+
+
+```
+
+
+
+
+#################### Overview of the data ###################
+
+load seurat object
+```{r echo=FALSE}
+# Read original seurat object
+
+combined.all <- LoadH5Seurat("~/combined.all.annotated.final.h5seurat")
+
+
+combined.all$modified.ident <- factor(combined.all$modified.ident,levels = c("Wtnaive","WTFFT","Rag2Il2rg","Rag2Il2rgIfnlr1"))
+
+data.table<- as.matrix(GetAssayData(combined.all, slot = "data"))
+scale.table <- GetAssayData(combined.all, slot = "scale.data")
+
+
+```
+
+
+QC plot
+```{r fig1,out.width = '40%'}
+
+# QC plots
+
+# switch assay from integrated to RNA to calculate the percentation of mitocondrial and ribosomal genes
+# because PercentageFeatureSet() function apply on raw count table, not normalized table.
+
+
+DefaultAssay(combined.all) <- "RNA"
+
+# plot
+renderPlot({
+  
+      DefaultAssay(combined.all) <- "RNA"
+      
+      combined.all <- PercentageFeatureSet(combined.all, "^mt-", col.name = "percent.mito") 
+      
+      # calculate the proportion gene expression that comes from ribosomal proteins
+      combined.all <- PercentageFeatureSet(combined.all, "^RP[SL][[:digit:]]|^RPLP[[:digit:]]|^RPSA", col.name = "percent.ribo") 
+      
+      # calculate proportion hemoglobin genes, which can give an indication of red blood cell contamination
+      combined.all <- PercentageFeatureSet(combined.all, "^HB[^(P)]", col.name = "percent.HB") 
+      
+      Idents(combined.all) <- "modified.ident"
+      
+      combined.all.violin.feature.cell <- VlnPlot(object = combined.all, group.by = "modified.ident",features = c("nFeature_RNA", "nCount_RNA","percent.mito"), ncol = 2) 
+      
+      #combined.all.violin.mt.rb.hb <- VlnPlot(object = combined.all, group.by = "modified.ident",features = c("percent.mito", "percent.ribo", "percent.HB"), ncol = 3)
+
+      
+      ggarrange(combined.all.violin.feature.cell)
+      #ggarrange(combined.all.featureScatter)
+
+
+})
+
+
+```
+
+
+Check relationship of gene expression level and gene number
+```{r}
+# plot
+renderPlot({
+  
+      DefaultAssay(combined.all) <- "RNA"
+    
+      
+      combined.all.featureScatter <- FeatureScatter(combined.all, "nCount_RNA", "nFeature_RNA", group.by = "modified.ident", pt.size = 0.5) +
+        labs(x = "") 
+      
+      ggarrange(combined.all.featureScatter)
+
+})
+
+
+
+```
+
+
+
+TSNE plot for entire dataset
+```{r}
+# TSNE plot
+
+
+# plot
+renderPlot({
+  
+  # tsne plot by clusters
+p.all.tsne <- DimPlot(combined.all, reduction = "tsne",group.by = "custom.cell.annotation",label = TRUE,repel = TRUE) +
+  theme(legend.position = "none") 
+
+  ggarrange(p.all.tsne)
+
+})
+
+# combined.all.annotated$pruned.labels
+# 
+# p.all.prune.tsne <- DimPlot(combined.all.annotated, reduction = "tsne",group.by = "pruned.labels",label = TRUE,repel = TRUE) +
+# theme(legend.position = "none")
+# p.all.prune.tsne
+# 
+# p.all.tsne.original <- DimPlot(combined.all, reduction = "tsne",group.by = "seurat_clusters",label = TRUE,repel = TRUE) +
+#   theme(legend.position = "right")
+# 
+# p.all.tsne.original
+# 
+# 
+# DimPlot(combined.all.annotated, reduction = "tsne",group.by = "custom.cell.annotation",label = TRUE,repel = TRUE) +
+# theme(legend.position = "none")
+
+```
+
+
+highlight certain cluster (if adding this module, the whole thing becomes extremely slow. So comment it out for now)
+```{r}
+# TSNE plot highlighting (super slow...)
+
+# total.gene.list <- rownames(x = combined.all.annotated)
+# 
+# select_hightlight_cell <- function(seurat.all){
+#   
+#   
+#         print("here1?")
+#         tsne.df <- FetchData(seurat.all, vars = c("tSNE_1", "tSNE_2","custom.cell.annotation"))
+#         
+#         print("here2?")
+#         
+#         
+#         gene.df <- t(matrix(seurat.all@assays$RNA@counts))
+#         
+#         print("here3?")
+#                 
+#         cell.gene.tsne.df <- merge(tsne.df,gene.df,by = 0)
+#         
+#         print("here4?")     
+#            
+#         #create a SharedData object for use in the ggplot below, group by 'groups'
+#         d <- highlight_key(cell.gene.tsne.df, ~custom.cell.annotation)
+#         
+#         print("here5?") 
+#                 
+#         #create a normal ggplot to fit your needs, but use the SharedData object as data for the chart
+#         p <- ggplot(d, aes(x = tSNE_1, y = tSNE_2, group = custom.cell.annotation)) + theme_bw() + geom_point(aes(color = custom.cell.annotation)) +
+#           theme(legend.position = "none")
+#         
+#         print("here6?") 
+#         
+#         
+#         #now ggplotly the newly created ggplot, and add text for the tooltips as needed
+#         gg <- ggplotly(p, tooltip = "custom.cell.annotation" )
+#         
+#         print("here7?") 
+#         
+#         #set the highlight-options to your liking, and plot...
+#         highlight(gg, on = "plotly_hover", off = "plotly_deselect") 
+# 
+#   
+# }
+# 
+# 
+# # input panel
+# inputPanel(
+#   
+#      selectInput(inputId = "subset_cluster",
+#                  label = "choose a cluster",
+#                  choices = unique(combined.all.annotated@meta.data$custom.cell.annotation)),
+#      
+#      selectInput(inputId = "select_gene",
+#                  label = "choose a gene",
+#                  choices = total.gene.list)
+# 
+# )
+# 
+# 
+# # plot
+# renderPlot({
+# 
+#   select_hightlight_cell(combined.all.annotated)
+# 
+# })
+
+
+```
+
+
+
+TSNE plot per sample
+```{r}
+
+# plot
+renderPlot({
+
+
+# per sample tsne plot
+p.per.sample.tsne <- DimPlot(combined.all, reduction = "tsne",split = "modified.ident",group.by = "custom.cell.annotation",label = FALSE,repel = TRUE) +
+  theme(legend.position = "bottom") 
+
+
+p.per.sample.tsne
+
+})
+
+# DimPlot(combined.all.annotated, reduction = "tsne",split = "modified.ident",group.by = "custom.cell.annotation",label = FALSE,repel = TRUE) +
+#   theme(legend.position = "none")
+
+
+```
+
+
+
+
+#################### Gene expression analysis and figures ###################
+
 
 
 
@@ -42,7 +1172,7 @@ library(data.table)
 ```{r}
 
 
-combined.all.final <- SeuratDisk::LoadH5Seurat("~/scRNA/Harshad/annotation/combined.all.annotated.final.h5seurat")
+combined.all.final <- SeuratDisk::LoadH5Seurat("~/combined.all.annotated.final.h5seurat")
 
 
 # modify the cluster names
@@ -76,30 +1206,6 @@ combined.all.final@meta.data <- combined.all.final@meta.data %>%
 
 # remove cluster Stromal Cells_MH and  CD8+ T cells (IEL)_MH
 combined.all.final <- subset(combined.all.final,subset = custom.cell.annotation %in% c("Goblet_MH","Enterocyte Immature Distal_MH","Transit-Amplifying/Stem/Early Progenitors_MH","Enterocyte Progenitor Late/Paneth_MH","Enterocyte Mature Proximal_MH","Macrophage_SCSA","Enterocyte Mature Distal_MH","Enterocyte Immature Proximal_MH","Enterocyte Distal_MH","Erythoid cell","Tuft_SCSA","Enterocyte Progenitor Early_MH","Tuft_MH","Entero-endocrine_MH","B cell","Paneth_MH","Mesenchymal Progenitor Cell_SCSA","Stromal_MH","T cell_SCSA","T cell","B cell_SCSA","Erythroid cell_SCSA"))
-
-
-#######################################################################
-                                                                      #
-# Version 1                                                           #
-# further modify Tuft cell into Tuft_Epcam+ and Tuft_Epcam+/CD45+     #
-                                                                      #
-#######################################################################
-
-# # extract tuft cells that only positively expressed in epcam gene
-# combined.all.final.tuft <- subset(combined.all.final,custome.cell.annotation.final == "Tuft")
-# # fetch the tuft cells that only positively expressed in epcam but not in cd45 (19 cells)
-# combined.all.final.tuft.epcam.only.cell.ID <- WhichCells(subset(combined.all.final.tuft,subset = Epcam > 0 & Ptprc == 0))
-# # fetch the tuft cells that only positively expressed only in Cd45 or CD45 and Epcam but not in cd45  (492)
-# combined.all.final.tuft.epcam.CD45.cell.ID <- setdiff(WhichCells(combined.all.final.tuft),combined.all.final.tuft.epcam.only.cell.ID)
-
-# # divide the current tuft cells
-# combined.all.final@meta.data <- combined.all.final@meta.data %>%
-#                           mutate(seurat_clusters_updated = as.character(seurat_clusters_updated)) %>%
-#                           mutate(seurat_clusters_updated = ifelse(cell.ID %in% combined.all.final.tuft.epcam.CD45.cell.ID,"26",
-#                                                                   ifelse(cell.ID %in% combined.all.final.tuft.epcam.only.cell.ID, "18",seurat_clusters_updated)) )%>%
-#                           mutate(custome.cell.annotation.split.tuft = ifelse(cell.ID %in% combined.all.final.tuft.epcam.only.cell.ID,"Tuft_Epcam+",ifelse(cell.ID %in% combined.all.final.tuft.epcam.CD45.cell.ID,"Tuft_CD45+/Epcam+",custome.cell.annotation.final)))
-# 
-# View(combined.all.final@meta.data %>% select(seurat_clusters_updated,custome.cell.annotation.split.tuft) %>% filter(custome.cell.annotation.split.tuft == "Tuft_CD45+/Epcam+"))
 
 
 
@@ -209,17 +1315,12 @@ cell.number.table <- data.frame(dataset = c("All","Cd45+","Epcam+","Tcell"),
                                 Rag2Il2rg = c(3754,3475,279,0),
                                 Rag2Il2rgIfnlr1 = c(4714,4127,587,6))
 
-write.csv(cell.number.table,"~/scRNA/Harshad/annotation/final_plots_update/cell.number.table.csv")
-
-
-
-
 
 
 ```
 
 
-# cell number per cluster
+# count cell number per cluster
 ```{r}
 
 
@@ -239,7 +1340,7 @@ wtnaive_cellNumber <- combined.all.final.wtnaive@meta.data %>%
                       distinct(custome.cell.annotation.split.tuft,cell_number) %>%
                       rename(wtnaive_clusters = custome.cell.annotation.split.tuft)
 
-write.csv(wtnaive_cellNumber,"~/scRNA/Harshad/annotation/final_plots_update/wtnaive_cellNumber_table.csv")
+write.csv(wtnaive_cellNumber,"~/final_plots_update/wtnaive_cellNumber_table.csv")
 
 
 wtfft_cellNumber <- combined.all.final.wtfft@meta.data %>%
@@ -249,7 +1350,7 @@ wtfft_cellNumber <- combined.all.final.wtfft@meta.data %>%
                       distinct(custome.cell.annotation.split.tuft,cell_number) %>%
                       rename(wtfft_clusters = custome.cell.annotation.split.tuft)
 
-write.csv(wtfft_cellNumber,"~/scRNA/Harshad/annotation/final_plots_update/wtfft_cellNumber_table.csv")
+write.csv(wtfft_cellNumber,"~/final_plots_update/wtfft_cellNumber_table.csv")
 
 
 
@@ -260,7 +1361,7 @@ Rag2Il2rg_cellNumber <- combined.all.final.Rag2Il2rg@meta.data %>%
                       distinct(custome.cell.annotation.split.tuft,cell_number) %>%
                       rename(Rag2Il2rg_clusters = custome.cell.annotation.split.tuft)
 
-write.csv(Rag2Il2rg_cellNumber,"~/scRNA/Harshad/annotation/final_plots_update/Rag2Il2rg_cellNumber_table.csv")
+write.csv(Rag2Il2rg_cellNumber,"~/final_plots_update/Rag2Il2rg_cellNumber_table.csv")
 
 
 Rag2Il2rgIfnlr1_cellNumber <- combined.all.final.Rag2Il2rgIfnlr1@meta.data %>%
@@ -270,7 +1371,7 @@ Rag2Il2rgIfnlr1_cellNumber <- combined.all.final.Rag2Il2rgIfnlr1@meta.data %>%
                       distinct(custome.cell.annotation.split.tuft,cell_number) %>%
                       rename(Rag2Il2rgIfnlr1_clusters = custome.cell.annotation.split.tuft)
 
-write.csv(Rag2Il2rgIfnlr1_cellNumber,"~/scRNA/Harshad/annotation/final_plots_update/Rag2Il2rgIfnlr1_cellNumber_table.csv")
+write.csv(Rag2Il2rgIfnlr1_cellNumber,"~/final_plots_update/Rag2Il2rgIfnlr1_cellNumber_table.csv")
 
 
 ```
@@ -326,12 +1427,6 @@ select_gene_for_all_cluster_old <- function(seurat.all,gene_name,split_Var,plot_
 }
 
 
-
-library(Seurat)
-library(ggplot2)
-library(patchwork)
-library(viridisLite)
-library(dplyr)
 
 select_gene_for_all_cluster <- function(seurat.all, gene_name, split_Var, plot_title) {
   
@@ -718,28 +1813,6 @@ plot_gene_boxplot <- function(seurat.obj, gene_names, metadata_var,
 # Ifnl2 and Ifnl3 combine (add gene expression values together)
 ```{r}
 
-# # add gene expression values of Ifnl2 and Ifnl3 together
-# epcam.final.Ifnl2.Ifnl3 <- epcam.final
-# Ifnl2.Ifnl3 <- epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] +epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl3",]
-# Ifnl2.Ifnl3 <- rbind(epcam.final.Ifnl2.Ifnl3@assays$RNA@data,Ifnl2.Ifnl3)
-# epcam.final.Ifnl2.Ifnl3@assays$RNA@data <- Ifnl2.Ifnl3
-# 
-# 
-# epcam.final.Ifnl2.Ifnl3@meta.data$modified.ident <-  factor(epcam.final.Ifnl2.Ifnl3@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
-# 
-# gene_expression_ifnl2.ifnl3 <- select_gene_for_all_cluster(epcam.final.Ifnl2.Ifnl3,"Ifnl2.Ifnl3")
-# ggsave(plot = gene_expression_ifnl2.ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/ifnl2.ifnl3_gene_expression.svg",width = 12, height = 10, dpi = 600)
-# 
-# epcam.final.Ifnl2.Ifnl3.violin <- epcam.final
-# epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl2",] <- epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl2",] + epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl3",]
-# 
-# 
-# epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl2",]
-# epcam.final@assays$RNA@data["Ifnl2",]
-# 
-# # check if everything is right
-# cbind(epcam.final.Ifnl2.Ifnl3.violin@assays$RNA@data["Ifnl2",],epcam.final@assays$RNA@data["Ifnl2",],epcam.final@assays$RNA@data["Ifnl3",])
-
 epcam.final.Ifnl2.Ifnl3 <- subset(epcam.final,subset = modified.ident %in% c("WT + FFT","WT naïve"))
 epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] <- epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl2",] + epcam.final.Ifnl2.Ifnl3@assays$RNA@data["Ifnl3",]
 epcam.final.Ifnl2.Ifnl3@meta.data$modified.ident <- factor(epcam.final.Ifnl2.Ifnl3@meta.data$modified.ident,levels = c("WT naïve","WT + FFT"))
@@ -747,7 +1820,7 @@ epcam.final.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft <- factor(e
 
 # violin plot
 violin_Ifnl2.Ifnl3 <- plot_violin(epcam.final.Ifnl2.Ifnl3,"Ifnl2")
-ggsave(plot = violin_Ifnl2.Ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Ifnl2.Ifnl3,file = "~/final_plots_update/Ifnl2.Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 epcam.final.Ifnl2.Ifnl3.expression <- epcam.final
@@ -760,7 +1833,7 @@ epcam.final.Ifnl2.Ifnl3.expression@meta.data$custome.cell.annotation.split.tuft 
 # gene expression plot
 gene_expression_ifnl2.ifnl3 <- select_gene_for_all_cluster(epcam.final.Ifnl2.Ifnl3.expression,"Ifnl2")
 
-ggsave(plot = gene_expression_ifnl2.ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.Ifnl3_expression_new.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifnl2.ifnl3,file = "~/final_plots_update/Ifnl2.Ifnl3_expression_new.svg",width = 12, height = 10, dpi = 600)
 
 
 
@@ -826,7 +1899,7 @@ stl1.stl5.ifnl2.ifnl3.plot <- ggplot(stl1.stl5.ifnl2.ifnl3.count,aes(Ifnl2, Muri
                             axis.title = element_text(size = 10))
 
 
-ggsave(plot=stl1.stl5.ifnl2.ifnl3.plot,file="~/scRNA/Harshad/annotation/final_plots_update/Stl1.Stl5.Ifnl2.Ifnl3_final_lm.svg",width = 7, height = 5, dpi = 600)
+ggsave(plot=stl1.stl5.ifnl2.ifnl3.plot,file="~/final_plots_update/Stl1.Stl5.Ifnl2.Ifnl3_final_lm.svg",width = 7, height = 5, dpi = 600)
 
 
 ```
@@ -858,7 +1931,7 @@ labs(title = "")  #+
 guides(col = guide_legend(ncol=5,override.aes = list(size = 3)))
 
 
-ggsave(plot = ggarrange(p.all.noAnnotation.tsne,p.per.sample.noAnnotation.tsne,common.legend = TRUE,legend = "bottom",widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/All_Clusters_final_tSNE_noAnnotation.svg",width = 18, height = 6, dpi = 600)
+ggsave(plot = ggarrange(p.all.noAnnotation.tsne,p.per.sample.noAnnotation.tsne,common.legend = TRUE,legend = "bottom",widths = c(0.27, 1)),file = "~/final_plots_update/All_Clusters_final_tSNE_noAnnotation.svg",width = 18, height = 6, dpi = 600)
 
 
 # entire dataset with annotation
@@ -875,7 +1948,7 @@ theme(legend.position = "none") +
 labs(title = "")
 
 
-ggsave(plot = ggarrange(p.all.withAnnotation.tsne,p.per.sample.withAnnotation.tsne,legend.common = TRUE,widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/All_Clusters_final_tSNE_withAnnotation.svg",width = 18, height = 9, dpi = 600)
+ggsave(plot = ggarrange(p.all.withAnnotation.tsne,p.per.sample.withAnnotation.tsne,legend.common = TRUE,widths = c(0.27, 1)),file = "~/final_plots_update/All_Clusters_final_tSNE_withAnnotation.svg",width = 18, height = 9, dpi = 600)
 
 
 #################################################################################################################################################
@@ -885,15 +1958,15 @@ p.cd45.all.noAnnotation.tsne <- DimPlot(dataset.list[["cd45"]], reduction = "tsn
 theme(legend.position = "bottom") +
 labs(title = "")
 
-# ggsave(plot = p.cd45.all.noAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/CD45_Positive_Clusters_all_tSNE_noAnnotation.svg",width = 10, height = 10, dpi = 600)
+# ggsave(plot = p.cd45.all.noAnnotation.tsne,file = "~/final_plots_update/CD45_Positive_Clusters_all_tSNE_noAnnotation.svg",width = 10, height = 10, dpi = 600)
 
 p.cd45.perSample.noAnnotation.tsne <- DimPlot(dataset.list[["cd45"]], reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = FALSE,repel = TRUE) +
 theme(legend.position = "bottom") +
 labs(title = "")
 
-# ggsave(plot = p.cd45.perSample.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/CD45_Positive_Clusters_perSample_tSNE_noAnnotation.svg",width = 10, height = 10, dpi = 600)
+# ggsave(plot = p.cd45.perSample.tsne,file = "~/final_plots_update/CD45_Positive_Clusters_perSample_tSNE_noAnnotation.svg",width = 10, height = 10, dpi = 600)
 
-ggsave(plot = ggarrange(p.cd45.all.noAnnotation.tsne,p.cd45.perSample.noAnnotation.tsne,common.legend = TRUE,legend = "bottom",widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/CD45_Positive_Clusters_final_tSNE_noAnnotation.svg",width = 18, height = 5, dpi = 60)
+ggsave(plot = ggarrange(p.cd45.all.noAnnotation.tsne,p.cd45.perSample.noAnnotation.tsne,common.legend = TRUE,legend = "bottom",widths = c(0.27, 1)),file = "~/final_plots_update/CD45_Positive_Clusters_final_tSNE_noAnnotation.svg",width = 18, height = 5, dpi = 60)
 
 
 # CD45 positive with annotation
@@ -901,15 +1974,15 @@ p.cd45.all.withAnnotation.tsne <- DimPlot(dataset.list[["cd45"]], reduction = "t
 theme(legend.position = "none") +
 labs(title = "")
 
-# ggsave(plot = p.cd45.all.withAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/cd45.all.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+# ggsave(plot = p.cd45.all.withAnnotation.tsne,file = "~/final_plots_update/cd45.all.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
 
 p.cd45.perSample.withAnnotation.tsne <- DimPlot(dataset.list[["cd45"]], reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = TRUE,repel = TRUE) +
 theme(legend.position = "none") +
 labs(title = "")
 
-# ggsave(plot = p.cd45.perSample.withAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/cd45.perSample.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+# ggsave(plot = p.cd45.perSample.withAnnotation.tsne,file = "~/final_plots_update/cd45.perSample.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
 
-ggsave(plot = ggarrange(p.cd45.all.withAnnotation.tsne,p.cd45.perSample.withAnnotation.tsne,widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/CD45_Positive_Clusters_final_tSNE_withAnnotation.svg",width = 18, height = 5, dpi = 600)
+ggsave(plot = ggarrange(p.cd45.all.withAnnotation.tsne,p.cd45.perSample.withAnnotation.tsne,widths = c(0.27, 1)),file = "~/final_plots_update/CD45_Positive_Clusters_final_tSNE_withAnnotation.svg",width = 18, height = 5, dpi = 600)
 
 
 
@@ -922,16 +1995,16 @@ p.epcam.all.noAnnotation.tsne <- DimPlot(dataset.list[["epcam"]], reduction = "t
 theme(legend.position = "bottom") +
 labs(title = "")
 
-# ggsave(plot = p.epcam.all.noAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/epcam.all.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+# ggsave(plot = p.epcam.all.noAnnotation.tsne,file = "~/final_plots_update/epcam.all.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
 
 
 p.epcam.perSample.noAnnotation.tsne <- DimPlot(dataset.list[["epcam"]], reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = FALSE,repel = FALSE) +
 theme(legend.position = "bottom") +
 labs(title = "")
 
-# ggsave(plot = p.epcam.perSample.noAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/epcam.perSample.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+# ggsave(plot = p.epcam.perSample.noAnnotation.tsne,file = "~/final_plots_update/epcam.perSample.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
 
-ggsave(plot = ggarrange(p.epcam.all.noAnnotation.tsne,p.epcam.perSample.noAnnotation.tsne,common.lengend = TRUE,widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/EPCAM_Positive_Clusters_final_tSNE_noAnnotation.svg",width = 15, height = 10, dpi = 600)
+ggsave(plot = ggarrange(p.epcam.all.noAnnotation.tsne,p.epcam.perSample.noAnnotation.tsne,common.lengend = TRUE,widths = c(0.27, 1)),file = "~/final_plots_update/EPCAM_Positive_Clusters_final_tSNE_noAnnotation.svg",width = 15, height = 10, dpi = 600)
 
 
 
@@ -940,16 +2013,16 @@ p.epcam.all.withAnnotation.tsne <- DimPlot(dataset.list[["epcam"]], reduction = 
 theme(legend.position = "none") +
 labs(title = "")
 
-# ggsave(plot = p.epcam.all.withAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/epcam.all.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+# ggsave(plot = p.epcam.all.withAnnotation.tsne,file = "~/final_plots_update/epcam.all.withAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
 
 
 p.epcam.perSample.withAnnotation.tsne <- DimPlot(dataset.list[["epcam"]], reduction = "tsne",split = "modified.ident",group.by = "custome.cell.annotation.split.tuft",label = TRUE,repel = TRUE) +
 theme(legend.position = "none") +
 labs(title = "")
 
-# ggsave(plot = p.epcam.perSample.noAnnotation.tsne,file = "~/scRNA/Harshad/annotation/final_plots_update/epcam.perSample.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
+# ggsave(plot = p.epcam.perSample.noAnnotation.tsne,file = "~/final_plots_update/epcam.perSample.noAnnotation.tsne.svg",width = 10, height = 10, dpi = 600)
 
-ggsave(plot = ggarrange(p.epcam.all.withAnnotation.tsne,p.epcam.perSample.withAnnotation.tsne,widths = c(0.27, 1)),file = "~/scRNA/Harshad/annotation/final_plots_update/EPCAM_Positive_Clusters_final_tSNE_withAnnotation.svg",width = 15, height = 4, dpi = 600)
+ggsave(plot = ggarrange(p.epcam.all.withAnnotation.tsne,p.epcam.perSample.withAnnotation.tsne,widths = c(0.27, 1)),file = "~/final_plots_update/EPCAM_Positive_Clusters_final_tSNE_withAnnotation.svg",width = 15, height = 4, dpi = 600)
 
 ```
 
@@ -961,53 +2034,48 @@ ggsave(plot = ggarrange(p.epcam.all.withAnnotation.tsne,p.epcam.perSample.withAn
 dataset.list[["epcam"]]@meta.data$modified.ident <-  factor(dataset.list[["epcam"]]@meta.data$modified.ident,levels = c("WT naïve","WT + FFT","Rag2-/-Il2rg-/-","Rag2-/-Il2rg-/-Ifnlr1-/-"))
 
 # make gene expression plots for genes Murine-astrovirus-STL1/Murine-astrovirus-STL5/ifnl2/ifnl3/ifit1/ifnb/ifna5/ifnlr1/IFIH1/
-# harshad: IFNa1, IFNa4 and IFNa11 (these genes are not found in this dataset)
+# IFNa1, IFNa4 and IFNa11 (these genes are not found in this dataset)
 gene_expression_stl1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Murine-astrovirus-STL1")
-ggsave(plot = gene_expression_stl1,file = "~/scRNA/Harshad/annotation/final_plots_update/STL1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_stl1,file = "~/final_plots_update/STL1_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 
 gene_expression_stl5 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Murine-astrovirus-STL5")
-ggsave(plot = gene_expression_stl5,file = "~/scRNA/Harshad/annotation/final_plots_update/STL5_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_stl5,file = "~/final_plots_update/STL5_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 
 gene_expression_ifnl2 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifnl2")
-ggsave(plot = gene_expression_ifnl2,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifnl2,file = "~/final_plots_update/Ifnl2_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 
 gene_expression_ifnl3 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifnl3")
-ggsave(plot = gene_expression_ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl3_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifnl3,file = "~/final_plots_update/Ifnl3_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 
 gene_expression_ifit1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifit1")
-ggsave(plot = gene_expression_ifit1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifit1,file = "~/final_plots_update/Ifit1_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 # there is no ifnb but only ifnb1 (here)
 gene_expression_ifnb1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifnb1")
-ggsave(plot = gene_expression_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifnb1,file = "~/final_plots_update/Ifnb1_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 
 combined.all.final.WTNaive.WTFFT <- subset(combined.all.final,subset = modified.ident %in% c("WT + FFT","WT naïve"))
 gene_expression_ifnb1_epcam_cd45 <- select_gene_for_all_cluster(combined.all.final,"Ifnb1")
-ggsave(plot = gene_expression_ifnb1_epcam_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_gene_expression_epcam_cd45.svg",width = 12, height = 10, dpi = 600)
-ggsave(plot = gene_expression_ifnb1_epcam_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_gene_expression_epcam_cd45.pdf",width = 12, height = 10, dpi = 600)
-
-
-# there is no ifna5
-# gene_expression_ifna5 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifna5")
-# ggsave(plot = gene_expression_ifna5,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifna5_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifnb1_epcam_cd45,file = "~/final_plots_update/Ifnb1_gene_expression_epcam_cd45.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifnb1_epcam_cd45,file = "~/final_plots_update/Ifnb1_gene_expression_epcam_cd45.pdf",width = 12, height = 10, dpi = 600)
 
 
 gene_expression_ifih1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifih1")
-ggsave(plot = gene_expression_ifih1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifih1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifih1,file = "~/final_plots_update/Ifih1_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 
 gene_expression_ifnlr1 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ifnlr1")
-ggsave(plot = gene_expression_ifnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_ifnlr1,file = "~/final_plots_update/Ifnlr1_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 
 
 gene_expression_Ddx58 <- select_gene_for_all_cluster(dataset.list[["epcam"]],"Ddx58")
-ggsave(plot = gene_expression_Ddx58,file = "~/scRNA/Harshad/annotation/final_plots_update/Ddx58_gene_expression.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_Ddx58,file = "~/final_plots_update/Ddx58_gene_expression.svg",width = 12, height = 10, dpi = 600)
 
 
 
@@ -1016,24 +2084,17 @@ ggsave(plot = gene_expression_Ddx58,file = "~/scRNA/Harshad/annotation/final_plo
 
 
 gene_expression_stl1_allClusters <- select_gene_for_all_cluster(combined.all.final,"Murine-astrovirus-STL1")
-ggsave(plot = gene_expression_stl1_allClusters,file = "~/scRNA/Harshad/annotation/final_plots_update/STL1_gene_expression_allClusters.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_stl1_allClusters,file = "~/final_plots_update/STL1_gene_expression_allClusters.svg",width = 12, height = 10, dpi = 600)
 
 
 gene_expression_stl5_allClusters <- select_gene_for_all_cluster(combined.all.final,"Murine-astrovirus-STL5")
-ggsave(plot = gene_expression_stl5_allClusters,file = "~/scRNA/Harshad/annotation/final_plots_update/STL5_gene_expression_allClusters.svg",width = 12, height = 10, dpi = 600)
+ggsave(plot = gene_expression_stl5_allClusters,file = "~/final_plots_update/STL5_gene_expression_allClusters.svg",width = 12, height = 10, dpi = 600)
 
 ```
 
 
 # violin plots for WTNaive and WTFFT samples
 ```{r}
-
-#violin plots for WTFFT AND WTNAIVE: #Murine-astrovirus-STL1/Murine-astrovirus-STL5/ifnl2/ifnl3/ifit1/ifnb/ifna5/ifnlr1/IFIH1
-# TA/Stem; Enterocyte EP; Enterocyte LP; IP Enterocyte; ID Enterocyte; MP Enterocyte; MD Enterocyte; D Enterocyte; Enteroendocrine; Goblet; Paneth, Tuft; Stromal
-
-
-
-# “TA/Stem”, then “Enterocyte EP”, then “Enterocyte LP”, then “IP Enterocyte”, then “ID Enterocyte”, then “MD Enterocyte”, then “MP Enterocyte”, then “D Enterocyte”, then “Goblet”, then “Enteroendocrine”, then “Paneth”, then “Tuft”
 
 seurat <- subset(dataset.list[["epcam"]],subset = modified.ident %in% c("WT + FFT","WT naïve"))
 seurat@meta.data$modified.ident <- droplevels(seurat@meta.data$modified.ident)
@@ -1043,51 +2104,46 @@ seurat@meta.data$modified.ident <- factor(seurat@meta.data$modified.ident,levels
 
 
 violin_stl1 <- plot_violin(seurat,"Murine-astrovirus-STL1")
-ggsave(plot = violin_stl1,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_stl1,file = "~/final_plots_update/stl1_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_stl5 <- plot_violin(seurat,"Murine-astrovirus-STL5")
-ggsave(plot = violin_stl5,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_stl5,file = "~/final_plots_update/stl5_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_ifnl2 <- plot_violin(seurat,"Ifnl2")
-ggsave(plot = violin_ifnl2,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl2,file = "~/final_plots_update/Ifnl2_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_ifnl3 <- plot_violin(seurat,"Ifnl3")
-ggsave(plot = violin_ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl3,file = "~/final_plots_update/Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
 
 violin_ifit1 <- plot_violin(seurat,"Ifit1")
-ggsave(plot = violin_ifit1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifit1,file = "~/final_plots_update/Ifit1_violin.svg",width = 12, height = 5, dpi = 600)
 
 violin_ifnb1 <- plot_violin(seurat,"Ifnb1")
-ggsave(plot = violin_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnb1,file = "~/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
 
 combined.all.final.WTNaive.WTFFT <- subset(combined.all.final,subset = modified.ident %in% c("WT + FFT","WT naïve"))
 violin_ifnb1_epcam_cd45 <- plot_violin(combined.all.final.WTNaive.WTFFT,"Ifnb1")
-ggsave(plot = violin_ifnb1_epcam_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_ifnb1_epcam_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnb1_epcam_cd45,file = "~/final_plots_update/violin_ifnb1_epcam_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 combined.all.final.allSample <- combined.all.final
 violin_ifnb1_epcam_cd45_allSample <- plot_violin(combined.all.final.allSample,"Ifnb1")
-ggsave(plot = violin_ifnb1_epcam_cd45_allSample,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_ifnb1_epcam_cd45_allSamples.pdf",width = 12, height = 5, dpi = 600)
-
-# there is no Ifna5
-# violin_ifna5 <- plot_violin(seurat,"Ifna5")
-# ggsave(plot = violin_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
-
+ggsave(plot = violin_ifnb1_epcam_cd45_allSample,file = "~/final_plots_update/violin_ifnb1_epcam_cd45_allSamples.pdf",width = 12, height = 5, dpi = 600)
 
 # ifnlr1/IFIH1
 violin_ifnlr1 <- plot_violin(seurat,"Ifnlr1")
-ggsave(plot = violin_ifnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnlr1,file = "~/final_plots_update/Ifnlr1_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_Ifih1 <- plot_violin(seurat,"Ifih1")
-ggsave(plot = violin_Ifih1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifih1_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Ifih1,file = "~/final_plots_update/Ifih1_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_Ddx58 <- plot_violin(seurat,"Ddx58")
-ggsave(plot = violin_Ddx58,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_Ddx58.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Ddx58,file = "~/final_plots_update/violin_Ddx58.svg",width = 12, height = 5, dpi = 600)
 
 
 ```
@@ -1103,84 +2159,84 @@ seurat.all@meta.data$modified.ident <- factor(seurat.all@meta.data$modified.iden
 
 
 violin_stl1_4samples <- plot_violin(seurat.all,"Murine-astrovirus-STL1")
-ggsave(plot = violin_stl1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_stl1_4samples,file = "~/final_plots_update/stl1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 
 
 violin_stl1_4samples_allCluster <- plot_violin(combined.all.final,"Murine-astrovirus-STL1")
-ggsave(plot = violin_stl1_4samples_allCluster,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1_violin_4samples_allClusters.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_stl1_4samples_allCluster,file = "~/final_plots_update/stl1_violin_4samples_allClusters.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_stl5_4samples <- plot_violin(seurat.all,"Murine-astrovirus-STL5")
-ggsave(plot = violin_stl5_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_stl5_4samples,file = "~/final_plots_update/stl5_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_stl5_4samples_allCluster <- plot_violin(combined.all.final,"Murine-astrovirus-STL5")
-ggsave(plot = violin_stl5_4samples_allCluster,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5_violin_4samples_allClusters.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_stl5_4samples_allCluster,file = "~/final_plots_update/stl5_violin_4samples_allClusters.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_ifnl2_4samples <- plot_violin(seurat.all,"Ifnl2")
-ggsave(plot = violin_ifnl2_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl2_4samples,file = "~/final_plots_update/Ifnl2_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_ifnl3_4samples <- plot_violin(seurat.all,"Ifnl3")
-ggsave(plot = violin_ifnl3_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl3_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl3_4samples,file = "~/final_plots_update/Ifnl3_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 violin_ifit1_4samples <- plot_violin(seurat.all,"Ifit1")
-ggsave(plot = violin_ifit1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifit1_4samples,file = "~/final_plots_update/Ifit1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 violin_Stat1_4samples <- plot_violin(seurat.all,"Stat1")
-ggsave(plot = violin_Stat1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Stat1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Stat1_4samples,file = "~/final_plots_update/Stat1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 violin_Oas1a_4samples <- plot_violin(seurat.all,"Oas1a")
-ggsave(plot = violin_Oas1a_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Oas1a_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Oas1a_4samples,file = "~/final_plots_update/Oas1a_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 violin_Isg15_4samples <- plot_violin(seurat.all,"Isg15")
-ggsave(plot = violin_Isg15_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Isg15_4samples,file = "~/final_plots_update/Isg15_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
 
 
 violin_ifnb1_4samples <- plot_violin(seurat.all,"Ifnb1")
-ggsave(plot = violin_ifnb1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnb1_4samples,file = "~/final_plots_update/Ifnb1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 # there is no Ifna5
 # violin_ifna5 <- plot_violin(seurat,"Ifna5")
-# ggsave(plot = violin_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
+# ggsave(plot = violin_ifnb1,file = "~/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 # ifnlr1/IFIH1
 violin_ifnlr1_4samples <- plot_violin(seurat.all,"Ifnlr1")
-ggsave(plot = violin_ifnlr1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnlr1_4samples,file = "~/final_plots_update/Ifnlr1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_Ifih1_4samples <- plot_violin(seurat.all,"Ifih1")
-ggsave(plot = violin_Ifih1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifih1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Ifih1_4samples,file = "~/final_plots_update/Ifih1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_Ddx58_4samples <- plot_violin(seurat.all,"Ddx58")
-ggsave(plot = violin_Ddx58_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_Ddx58_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Ddx58_4samples,file = "~/final_plots_update/violin_Ddx58_4samples.svg",width = 12, height = 5, dpi = 600)
 
 
 
 
 # Muc2
 violin_Muc2_4samples <- plot_violin(seurat.all,"Muc2","Muc2")
-ggsave(plot = violin_Muc2_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_Muc2_4samples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Muc2_4samples,file = "~/final_plots_update/violin_Muc2_4samples.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Fcgbp
 violin_Fcgbp_4samples <- plot_violin(seurat.all,"Fcgbp","Fcgbp")
-ggsave(plot = violin_Fcgbp_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Fcgbp_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Fcgbp_4samples,file = "~/final_plots_update/Fcgbp_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
 
 
 
 # Clca1
 violin_Clca1_4samples <- plot_violin(seurat.all,"Clca1","Clca1")
-ggsave(plot = violin_Clca1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Clca1_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Clca1_4samples,file = "~/final_plots_update/Clca1_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Zg16
 violin_Zg16_4samples <- plot_violin(seurat.all,"Zg16","Zg16")
-ggsave(plot = violin_Zg16_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Zg16_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Zg16_4samples,file = "~/final_plots_update/Zg16_violin_4samples.pdf",width = 12, height = 5, dpi = 600)
 
 
 
@@ -1194,11 +2250,11 @@ seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft <- factor(se
 
 
 violin_ifnl2.ifnl3_4samples <- plot_violin(seurat.all.Ifnl2.Ifnl3,"Ifnl2")
-ggsave(plot = violin_ifnl2.ifnl3_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/ifnl2.ifnl3_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl2.ifnl3_4samples,file = "~/final_plots_update/ifnl2.ifnl3_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 
 # violin_Ifnb1_4samples <- plot_violin(seurat.all,"Ifnb1")
-# ggsave(plot = violin_Ifnb1_4samples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
+# ggsave(plot = violin_Ifnb1_4samples,file = "~/final_plots_update/Ifnb1_violin_4samples.svg",width = 12, height = 5, dpi = 600)
 
 rownames(seurat.all)[rownames(seurat.all) %like% "Ifnb1"]
 
@@ -1212,8 +2268,8 @@ rownames(seurat.all)[rownames(seurat.all) %like% "Ifna4"]
 ```
 
 
-Per reviewers
-In Fig 2, Can we compare WT vs WT+FFT and Rag2Il2rg vs Rag2Il2rgIfnlr1 for statistical analysis? The reviewer wants to see if the gene expression across these comparison groups are significantly different.
+
+Based on Fig 2, do WT vs WT+FFT and Rag2Il2rg vs Rag2Il2rgIfnlr1 for statistical analysis, to see if the gene expression across these comparison groups are significantly different.
 ```{r}
 
 seurat.all <- dataset.list[["epcam"]]
@@ -1226,7 +2282,6 @@ seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft <- factor(se
 
 Idents(seurat.all.Ifnl2.Ifnl3) <- "modified.ident"
 
-unique(seurat.all.Ifnl2.Ifnl3$modified.ident)
 
 # DE analysis between WT vs WT+FFT
 DE_WT_vs_WTFFT <- FindMarkers(
@@ -1239,7 +2294,7 @@ DE_WT_vs_WTFFT <- FindMarkers(
 )
 
 DE_WT_vs_WTFFT.stats <- DE_WT_vs_WTFFT %>% filter(rownames(.) %in% c("Ifnl2","Ifnlr1","Ifit1","Isg15"))
-write.csv(DE_WT_vs_WTFFT.stats,"~/scRNA/Harshad/annotation/final_plots_update/DE_WT_vs_WTFFT.stats.csv")
+write.csv(DE_WT_vs_WTFFT.stats,"~/final_plots_update/DE_WT_vs_WTFFT.stats.csv")
 
 
 # DE analysis between WT vs WT+FFT
@@ -1253,55 +2308,54 @@ DE_Rag2Il2rgIfnlr1_Rag2Il2rg <- FindMarkers(
 )
 
 DE_Rag2Il2rgIfnlr1_Rag2Il2rg.stats <- DE_Rag2Il2rgIfnlr1_Rag2Il2rg %>% filter(rownames(.) %in% c("Ifnl2","Ifnlr1","Ifit1","Isg15"))
-write.csv(DE_Rag2Il2rgIfnlr1_Rag2Il2rg.stats,"~/scRNA/Harshad/annotation/final_plots_update/DE_Rag2Il2rgIfnlr1_Rag2Il2rg.stats.csv")
+write.csv(DE_Rag2Il2rgIfnlr1_Rag2Il2rg.stats,"~/final_plots_update/DE_Rag2Il2rgIfnlr1_Rag2Il2rg.stats.csv")
 
 
 
 # Ifnl2.Ifnl3
 violin_ifnl2.ifnl3_Combinedsamples <- plot_violin(seurat.all.Ifnl2.Ifnl3,"Ifnl2","Ifnl2.Ifnl3")
-ggsave(plot = violin_ifnl2.ifnl3_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/ifnl2.ifnl3_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 100)
+ggsave(plot = violin_ifnl2.ifnl3_Combinedsamples,file = "~/final_plots_update/ifnl2.ifnl3_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 100)
 
 # Ifnlr1
 violin_ifnlr1_Combinedsamples <- plot_violin(seurat.all,"Ifnlr1","Ifnlr1")
-ggsave(plot = violin_ifnlr1_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnlr1_Combinedsamples,file = "~/final_plots_update/Ifnlr1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
 
 # Ifit1
 violin_ifit1_Combinedsamples <- plot_violin(seurat.all,"Ifit1","Ifit1")
-ggsave(plot = violin_ifit1_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifit1_Combinedsamples,file = "~/final_plots_update/Ifit1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Isg15
 violin_Isg15_Combinedsamples <- plot_violin(seurat.all,"Isg15","Isg15")
-ggsave(plot = violin_Isg15_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Isg15_Combinedsamples,file = "~/final_plots_update/Isg15_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Muc2
 violin_Muc2_Combinedsamples <- plot_violin(seurat.all,"Muc2","Muc2")
-ggsave(plot = violin_Muc2_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Muc2_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Muc2_Combinedsamples,file = "~/final_plots_update/Muc2_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Fcgbp
 violin_Fcgbp_Combinedsamples <- plot_violin(seurat.all,"Fcgbp","Fcgbp")
-ggsave(plot = violin_Fcgbp_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Fcgbp_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Fcgbp_Combinedsamples,file = "~/final_plots_update/Fcgbp_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
 
 
 
 # Clca1
 violin_Clca1_Combinedsamples <- plot_violin(seurat.all,"Clca1","Clca1")
-ggsave(plot = violin_Clca1_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Clca1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Clca1_Combinedsamples,file = "~/final_plots_update/Clca1_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Zg16
 violin_Zg16_Combinedsamples <- plot_violin(seurat.all,"Zg16","Zg16")
-ggsave(plot = violin_Zg16_Combinedsamples,file = "~/scRNA/Harshad/annotation/final_plots_update/Zg16_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Zg16_Combinedsamples,file = "~/final_plots_update/Zg16_violin_Combinedsamples.pdf",width = 12, height = 5, dpi = 600)
 
 
 ```
 
 
 
-Per reviewers
-For supplementary fig 1B, can you separate all the cells as muAstV positive cells vs negative cells and then look at Ifit1, Isg15 and Ifnl2/3 expression. We want to check if infected vs uninfected cells show any differences in interferon related genes.
+Based on supplementary fig 1B, separate all the cells as muAstV positive cells vs negative cells and then look at Ifit1, Isg15 and Ifnl2/3 expression, to check if infected vs uninfected cells show any differences in interferon related genes.
 ```{r}
 
 seurat.all$Astrovirus1_expression <- ifelse(
@@ -1367,21 +2421,21 @@ seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1 <- subset(seurat.all.Ifnl2.Ifnl3,subset =
 
 # ifit1 - WT - Astro1
 gene_expression_ifit1_Astro1Express_WTnaive <- select_gene_for_all_cluster(seurat.all.WT,"Ifit1",split_Var = "Astrovirus1_expression",plot_title = "Ifit1")
-ggsave(plot = gene_expression_ifit1_Astro1Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_ifit1_Astro1Express_WTnaive,file = "~/final_plots_update/ifit1_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
 
 # Ifit1 - WTFFT - Astro1
 gene_expression_ifit1_Astro1Express_WTFFT <- select_gene_for_all_cluster(seurat.all.WTFFT,"Ifit1",split_Var = "Astrovirus1_expression",plot_title = "Ifit1")
-ggsave(plot = gene_expression_ifit1_Astro1Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_ifit1_Astro1Express_WTFFT,file = "~/final_plots_update/ifit1_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Ifit1 - Rag2Il2rg - Astro1
 gene_expression_ifit1_Astro1Express_Rag2Il2rg <- select_gene_for_all_cluster(seurat.all.Rag2Il2rg,"Ifit1",split_Var = "Astrovirus1_expression",plot_title = "Ifit1")
-ggsave(plot = gene_expression_ifit1_Astro1Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_ifit1_Astro1Express_Rag2Il2rg,file = "~/final_plots_update/ifit1_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Ifit1 - Rag2Il2rgIfnlr1 - Astro1
 gene_expression_ifit1_Astro1Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster(seurat.all.Rag2Il2rgIfnlr1,"Ifit1",split_Var = "Astrovirus1_expression",plot_title = "Ifit1")
-ggsave(plot = gene_expression_ifit1_Astro1Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_ifit1_Astro1Express_Rag2Il2rgIfnlr1,file = "~/final_plots_update/ifit1_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
 
 
 #--------------------Isg15---------------------#
@@ -1389,21 +2443,21 @@ ggsave(plot = gene_expression_ifit1_Astro1Express_Rag2Il2rgIfnlr1,file = "~/scRN
 
 # Isg15 - WT - Astro1
 gene_expression_Isg15_Astro1Express_WTnaive <- select_gene_for_all_cluster(seurat.all.WT,"Isg15",split_Var = "Astrovirus1_expression",plot_title = "Isg15")
-ggsave(plot = gene_expression_Isg15_Astro1Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Isg15_Astro1Express_WTnaive,file = "~/final_plots_update/Isg15_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
 
 # Isg15 - WTFFT - Astro1
 gene_expression_Isg15_Astro1Express_WTFFT <- select_gene_for_all_cluster(seurat.all.WTFFT,"Isg15",split_Var = "Astrovirus1_expression",plot_title = "Isg15")
-ggsave(plot = gene_expression_Isg15_Astro1Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Isg15_Astro1Express_WTFFT,file = "~/final_plots_update/Isg15_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Isg15 - Rag2Il2rg - Astro1
 gene_expression_Isg15_Astro1Express_Rag2Il2rg <- select_gene_for_all_cluster(seurat.all.Rag2Il2rg,"Isg15",split_Var = "Astrovirus1_expression",plot_title = "Isg15")
-ggsave(plot = gene_expression_Isg15_Astro1Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Isg15_Astro1Express_Rag2Il2rg,file = "~/final_plots_update/Isg15_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Isg15 - Rag2Il2rgIfnlr1 - Astro1
 gene_expression_Isg15_Astro1Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster(seurat.all.Rag2Il2rgIfnlr1,"Isg15",split_Var = "Astrovirus1_expression",plot_title = "Isg15")
-ggsave(plot = gene_expression_Isg15_Astro1Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Isg15_Astro1Express_Rag2Il2rgIfnlr1,file = "~/final_plots_update/Isg15_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
 
 
 
@@ -1411,21 +2465,21 @@ ggsave(plot = gene_expression_Isg15_Astro1Express_Rag2Il2rgIfnlr1,file = "~/scRN
 
 # Ifnl2/3 - WT - Astro1
 gene_expression_Ifnl2.3_Astro1Express_WTnaive <- select_gene_for_all_cluster(seurat.all.Ifnl2.Ifnl3.WT,"Ifnl2",split_Var = "Astrovirus1_expression",plot_title = "Ifnl2/3")
-ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTnaive,file = "~/final_plots_update/Ifnl2.3_Astro1Express_WTnaive.pdf",width = 12, height = 5, dpi = 600)
 
 # Ifnl2/3 - WTFFT - Astro1
 gene_expression_Ifnl2.3_Astro1Express_WTFFT <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.WTFFT,"Ifnl2",split_Var = "Astrovirus1_expression",plot_title = "Ifnl2/3")
-ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTFFT,file = "~/final_plots_update/Ifnl2.3_Astro1Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Ifnl2/3 - Rag2Il2rg - Astro1
 gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rg <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,"Ifnl2",split_Var = "Astrovirus1_expression",plot_title = "Ifnl2/3")
-ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rg,file = "~/final_plots_update/Ifnl2.3_Astro1Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Ifnl2/3 - Rag2Il2rgIfnlr1 - Astro1
 gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,"Ifnl2",split_Var = "Astrovirus1_expression",plot_title = "Ifnl2/3")
-ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1,file = "~/final_plots_update/Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
 
 
 ################################################## Astro5 ##############################################################
@@ -1435,21 +2489,21 @@ ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_Rag2Il2rgIfnlr1,file = "~/sc
 
 # ifit1 - WT - Astro5
 gene_expression_ifit1_Astro5Express_WTnaive <- select_gene_for_all_cluster(seurat.all.WT,"Ifit1",split_Var = "Astrovirus5_expression",plot_title = "Ifit1")
-ggsave(plot = gene_expression_ifit1_Astro5Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
+ggsave(plot = gene_expression_ifit1_Astro5Express_WTnaive,file = "~/final_plots_update/ifit1_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
 
 # Ifit1 - WTFFT - Astro5
 gene_expression_ifit1_Astro5Express_WTFFT <- select_gene_for_all_cluster_old(seurat.all.WTFFT,"Ifit1",split_Var = "Astrovirus5_expression",plot_title = "Ifit1")
-ggsave(plot = gene_expression_ifit1_Astro5Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_ifit1_Astro5Express_WTFFT,file = "~/final_plots_update/ifit1_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Ifit1 - Rag2Il2rg - Astro1
 gene_expression_ifit1_Astro5Express_Rag2Il2rg <- select_gene_for_all_cluster(seurat.all.Rag2Il2rg,"Ifit1",split_Var = "Astrovirus5_expression",plot_title = "Ifit1")
-ggsave(plot = gene_expression_ifit1_Astro5Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_ifit1_Astro5Express_Rag2Il2rg,file = "~/final_plots_update/ifit1_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Ifit1 - Rag2Il2rgIfnlr1 - Astro1
 gene_expression_ifit1_Astro5Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster(seurat.all.Rag2Il2rgIfnlr1,"Ifit1",split_Var = "Astrovirus5_expression",plot_title = "Ifit1")
-ggsave(plot = gene_expression_ifit1_Astro5Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/ifit1_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_ifit1_Astro5Express_Rag2Il2rgIfnlr1,file = "~/final_plots_update/ifit1_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
 
 
 #--------------------Isg15---------------------#
@@ -1457,21 +2511,21 @@ ggsave(plot = gene_expression_ifit1_Astro5Express_Rag2Il2rgIfnlr1,file = "~/scRN
 
 # Isg15 - WT - Astro1
 gene_expression_Isg15_Astro5Express_WTnaive <- select_gene_for_all_cluster(seurat.all.WT,"Isg15",split_Var = "Astrovirus5_expression",plot_title = "Isg15")
-ggsave(plot = gene_expression_Isg15_Astro5Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Isg15_Astro5Express_WTnaive,file = "~/final_plots_update/Isg15_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
 
 # Isg15 - WTFFT - Astro1
 gene_expression_Isg15_Astro5Express_WTFFT <- select_gene_for_all_cluster(seurat.all.WTFFT,"Isg15",split_Var = "Astrovirus5_expression",plot_title = "Isg15")
-ggsave(plot = gene_expression_Isg15_Astro5Express_WTFFT ,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Isg15_Astro5Express_WTFFT ,file = "~/final_plots_update/Isg15_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Isg15 - Rag2Il2rg - Astro1
 gene_expression_Isg15_Astro5Express_Rag2Il2rg <- select_gene_for_all_cluster(seurat.all.Rag2Il2rg,"Isg15",split_Var = "Astrovirus5_expression",plot_title = "Isg15")
-ggsave(plot = gene_expression_Isg15_Astro5Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Isg15_Astro5Express_Rag2Il2rg,file = "~/final_plots_update/Isg15_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Isg15 - Rag2Il2rgIfnlr1 - Astro1
 gene_expression_Isg15_Astro5Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster(seurat.all.Rag2Il2rgIfnlr1,"Isg15",split_Var = "Astrovirus5_expression",plot_title = "Isg15")
-ggsave(plot = gene_expression_Isg15_Astro5Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Isg15_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Isg15_Astro5Express_Rag2Il2rgIfnlr1,file = "~/final_plots_update/Isg15_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
 
 
 
@@ -1480,38 +2534,30 @@ ggsave(plot = gene_expression_Isg15_Astro5Express_Rag2Il2rgIfnlr1,file = "~/scRN
 
 # Ifnl2/3 - WT - Astro5
 gene_expression_Ifnl2.3_Astro1Express_WTnaive <- select_gene_for_all_cluster(seurat.all.Ifnl2.Ifnl3.WT,"Ifnl2",split_Var = "Astrovirus5_expression",plot_title = "Ifnl2/3")
-ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTnaive,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Ifnl2.3_Astro1Express_WTnaive,file = "~/final_plots_update/Ifnl2.3_Astro5Express_WTnaive.pdf",width = 6, height = 5, dpi = 600)
 
 # Ifnl2/3 - WTFFT - Astro1
 gene_expression_Ifnl2.3_Astro5Express_WTFFT <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.WTFFT,"Ifnl2",split_Var = "Astrovirus5_expression",plot_title = "Ifnl2/3")
-ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_WTFFT,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_WTFFT,file = "~/final_plots_update/Ifnl2.3_Astro5Express_WTFFT.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Ifnl2/3 - Rag2Il2rg - Astro1
 gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rg <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.Rag2Il2rg,"Ifnl2",split_Var = "Astrovirus5_expression",plot_title = "Ifnl2/3")
-ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rg,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rg,file = "~/final_plots_update/Ifnl2.3_Astro5Express_Rag2Il2rg.pdf",width = 12, height = 5, dpi = 600)
 
 
 # Ifnl2/3 - Rag2Il2rgIfnlr1 - Astro1
 gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rgIfnlr1 <- select_gene_for_all_cluster_old(seurat.all.Ifnl2.Ifnl3.Rag2Il2rgIfnlr1,"Ifnl2",split_Var = "Astrovirus5_expression",plot_title = "Ifnl2/3")
-ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rgIfnlr1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2.3_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
+ggsave(plot = gene_expression_Ifnl2.3_Astro5Express_Rag2Il2rgIfnlr1,file = "~/final_plots_update/Ifnl2.3_Astro5Express_Rag2Il2rgIfnlr1.pdf",width = 12, height = 5, dpi = 600)
 
 
 
 ```
 
 
-Per Megan
-1. For all of the IECs (so not individual clusters) and all of the cells for each group (so a different plot for WT naive, a different plot for WT+FFT, etc.)? This would be for the Ifnl2/3, Isg15, Ifit1, and Mda5 plots. Just want to see if there is a clear signal of them being either the same overall or different overall for either the muAstV-negative or -positive cells.
+For all of the IECs (so not individual clusters) and all of the cells for each group (so a different plot for WT naive, a different plot for WT+FFT, etc.) for the Ifnl2/3, Isg15, Ifit1, and Mda5 plots, to see if there is a clear signal of them being either the same overall or different overall for either the muAstV-negative or -positive cells.
 ```{r}
 
-
-library(Seurat)
-library(ggplot2)
-library(dplyr)
-library(tidyr)
-library(ggpubr)
-library(ggbeeswarm)
 
 
 seurat.all <- dataset.list[["epcam"]]
@@ -1586,7 +2632,7 @@ p.WTFFT.Astrovirus1.Ifnl2.3.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WTFFT.Astrovirus1.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WTFFT.Astrovirus1.Ifnl2.3.boxplot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1598,7 +2644,7 @@ p.WTFFT.Astrovirus1.Ifnl2.3.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WTFFT.Astrovirus1.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WTFFT.Astrovirus1.Ifnl2.3.violin$plot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1612,7 +2658,7 @@ p.Rag2Il2rg.Astrovirus1.Ifnl2.3.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus1.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rg.Astrovirus1.Ifnl2.3.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin  <- plot_violin_stats(
@@ -1623,7 +2669,7 @@ p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1637,7 +2683,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin  <- plot_violin_stats(
@@ -1648,7 +2694,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1667,7 +2713,7 @@ p.WT.Astrovirus1.Isg15.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WT.Astrovirus1.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WT.Astrovirus1.Isg15.boxplot,file="~/final_plots_update/perMegan/p.WT.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1679,7 +2725,7 @@ p.WT.Astrovirus1.Isg15.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WT.Astrovirus1.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WT.Astrovirus1.Isg15.violin$plot,file="~/final_plots_update/perMegan/p.WT.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1694,7 +2740,7 @@ p.WTFFT.Astrovirus1.Isg15.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WTFFT.Astrovirus1.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WTFFT.Astrovirus1.Isg15.boxplot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1706,7 +2752,7 @@ p.WTFFT.Astrovirus1.Isg15.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WTFFT.Astrovirus1.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WTFFT.Astrovirus1.Isg15.violin$plot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1723,7 +2769,7 @@ p.Rag2Il2rg.Astrovirus1.Isg15.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus1.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rg.Astrovirus1.Isg15.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1736,7 +2782,7 @@ p.Rag2Il2rg.Astrovirus1.Isg15.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus1.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rg.Astrovirus1.Isg15.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1753,7 +2799,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1765,7 +2811,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1784,7 +2830,7 @@ p.WT.Astrovirus1.Ifit1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WT.Astrovirus1.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WT.Astrovirus1.Ifit1.boxplot,file="~/final_plots_update/perMegan/p.WT.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1796,7 +2842,7 @@ p.WT.Astrovirus1.Ifit1.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WT.Astrovirus1.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WT.Astrovirus1.Ifit1.violin$plot,file="~/final_plots_update/perMegan/p.WT.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1810,7 +2856,7 @@ p.WTFFT.Astrovirus1.Ifit1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WTFFT.Astrovirus1.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WTFFT.Astrovirus1.Ifit1.boxplot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1823,7 +2869,7 @@ p.WTFFT.Astrovirus1.Ifit1.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WTFFT.Astrovirus1.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WTFFT.Astrovirus1.Ifit1.violin$plot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1838,7 +2884,7 @@ p.Rag2Il2rg.Astrovirus1.Ifit1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus1.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rg.Astrovirus1.Ifit1.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1850,7 +2896,7 @@ p.Rag2Il2rg.Astrovirus1.Ifit1.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus1.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rg.Astrovirus1.Ifit1.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1866,7 +2912,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1878,7 +2924,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus1.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1905,7 +2951,7 @@ p.WTFFT.Astrovirus5.Ifnl2.3.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WTFFT.Astrovirus5.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WTFFT.Astrovirus5.Ifnl2.3.boxplot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1917,7 +2963,7 @@ p.WTFFT.Astrovirus5.Ifnl2.3.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WTFFT.Astrovirus5.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WTFFT.Astrovirus5.Ifnl2.3.violin$plot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1932,7 +2978,7 @@ p.Rag2Il2rg.Astrovirus5.Ifnl2.3.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus5.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rg.Astrovirus5.Ifnl2.3.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1944,7 +2990,7 @@ p.Rag2Il2rg.Astrovirus5.Ifnl2.3.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus5.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rg.Astrovirus5.Ifnl2.3.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1961,7 +3007,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -1974,7 +3020,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifnl2.3.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -1991,7 +3037,7 @@ p.WT.Astrovirus5.Isg15.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WT.Astrovirus5.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WT.Astrovirus5.Isg15.boxplot,file="~/final_plots_update/perMegan/p.WT.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2003,7 +3049,7 @@ p.WT.Astrovirus5.Isg15.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WT.Astrovirus5.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WT.Astrovirus5.Isg15.violin$plot,file="~/final_plots_update/perMegan/p.WT.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2018,7 +3064,7 @@ p.WTFFT.Astrovirus5.Isg15.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WTFFT.Astrovirus5.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WTFFT.Astrovirus5.Isg15.boxplot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2030,7 +3076,7 @@ p.WTFFT.Astrovirus5.Isg15.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WTFFT.Astrovirus5.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WTFFT.Astrovirus5.Isg15.violin$plot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2046,7 +3092,7 @@ p.Rag2Il2rg.Astrovirus5.Isg15.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus5.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rg.Astrovirus5.Isg15.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2058,7 +3104,7 @@ p.Rag2Il2rg.Astrovirus5.Isg15.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus5.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rg.Astrovirus5.Isg15.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2072,7 +3118,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2084,7 +3130,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Isg15.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2102,7 +3148,7 @@ p.WT.Astrovirus5.Ifit1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WT.Astrovirus5.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WT.Astrovirus5.Ifit1.boxplot,file="~/final_plots_update/perMegan/p.WT.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.WT.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
@@ -2113,7 +3159,7 @@ p.WT.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WT.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WT.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WT.Astrovirus5.Ifit1.violin$plot,file="~/final_plots_update/perMegan/p.WT.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2127,7 +3173,7 @@ p.WTFFT.Astrovirus5.Ifit1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.WTFFT.Astrovirus5.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.WTFFT.Astrovirus5.Ifit1.boxplot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2139,7 +3185,7 @@ p.WTFFT.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.WTFFT.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.WTFFT.Astrovirus5.Ifit1.violin$plot,file="~/final_plots_update/perMegan/p.WTFFT.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2153,7 +3199,7 @@ p.Rag2Il2rg.Astrovirus5.Ifit1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus5.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rg.Astrovirus5.Ifit1.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2165,7 +3211,7 @@ p.Rag2Il2rg.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rg.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rg.Astrovirus5.Ifit1.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rg.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2179,7 +3225,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.boxplot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2191,7 +3237,7 @@ p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin  <- plot_violin_stats(
   fisher_groups = c("Astrovirus_Neg", "Astrovirus_Pos")
 )
 
-ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin$plot,file="~/final_plots_update/perMegan/p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2207,8 +3253,7 @@ ggsave(p.Rag2Il2rgIfnlr1.Astrovirus5.Ifit1.violin$plot,file="~/scRNA/Harshad/ann
 
 
 
-Per Megan
-2.  for the goblet cell markers that Harshad sent, would you be able to just focus on the goblet cell cluster, and make violin plots like this, Where you are looking at the muAstV levels in either the marker-negative or marker-positive cells? It would also be helpful to just give a count of muAstV-positive versus muAstV-negative cell numbers for the marker-negative versus marker-positive groups. Hope that makes sense!
+For the goblet cell markers, to just focus on the goblet cell cluster, and make violin plots, where you are looking at the muAstV levels in either the marker-negative or marker-positive cells? It would also be helpful to just give a count of muAstV-positive versus muAstV-negative cell numbers for the marker-negative versus marker-positive groups.
 ```{r}
 
 
@@ -2262,7 +3307,7 @@ p.Goblet.WT.Astrovirus1.Muc2.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WT.Astrovirus1.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WT.Astrovirus1.Muc2.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2274,7 +3319,7 @@ p.Goblet.WT.Astrovirus1.Muc2.violin  <- plot_violin_stats(
   fisher_groups = c("Muc2_Neg", "Muc2_Pos")
 )
 
-ggsave(p.Goblet.WT.Astrovirus1.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WT.Astrovirus1.Muc2.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2288,7 +3333,7 @@ p.Goblet.WTFFT.Astrovirus1.Muc2.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus1.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WTFFT.Astrovirus1.Muc2.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.WTFFT.Astrovirus1.Muc2.violin  <- plot_violin_stats(
@@ -2299,7 +3344,7 @@ p.Goblet.WTFFT.Astrovirus1.Muc2.violin  <- plot_violin_stats(
   fisher_groups = c("Muc2_Neg", "Muc2_Pos")
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus1.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WTFFT.Astrovirus1.Muc2.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2313,7 +3358,7 @@ p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2325,7 +3370,7 @@ p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.violin  <- plot_violin_stats(
   fisher_groups = c("Muc2_Neg", "Muc2_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2340,7 +3385,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2352,7 +3397,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.violin  <- plot_violin_stats(
   fisher_groups = c("Muc2_Neg", "Muc2_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2370,7 +3415,7 @@ p.Goblet.WT.Astrovirus1.Fcgbp.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WT.Astrovirus1.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WT.Astrovirus1.Fcgbp.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2382,7 +3427,7 @@ p.Goblet.WT.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
   fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
 )
 
-ggsave(p.Goblet.WT.Astrovirus1.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WT.Astrovirus1.Fcgbp.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2396,7 +3441,7 @@ p.Goblet.WTFFT.Astrovirus1.Fcgbp.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus1.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WTFFT.Astrovirus1.Fcgbp.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2409,7 +3454,7 @@ p.Goblet.WTFFT.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
   fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus1.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WTFFT.Astrovirus1.Fcgbp.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2423,7 +3468,7 @@ p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
@@ -2434,7 +3479,7 @@ p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
   fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2448,7 +3493,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2460,7 +3505,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.violin  <- plot_violin_stats(
   fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2477,7 +3522,7 @@ p.Goblet.WT.Astrovirus1.Clca1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WT.Astrovirus1.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WT.Astrovirus1.Clca1.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2489,7 +3534,7 @@ p.Goblet.WT.Astrovirus1.Clca1.violin  <- plot_violin_stats(
   fisher_groups = c("Clca1_Neg", "Clca1_Pos")
 )
 
-ggsave(p.Goblet.WT.Astrovirus1.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WT.Astrovirus1.Clca1.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2503,7 +3548,7 @@ p.Goblet.WTFFT.Astrovirus1.Clca1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus1.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WTFFT.Astrovirus1.Clca1.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2515,7 +3560,7 @@ p.Goblet.WTFFT.Astrovirus1.Clca1.violin  <- plot_violin_stats(
   fisher_groups = c("Clca1_Neg", "Clca1_Pos")
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus1.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WTFFT.Astrovirus1.Clca1.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2529,7 +3574,7 @@ p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin  <- plot_violin_stats(
@@ -2540,7 +3585,7 @@ p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin  <- plot_violin_stats(
   fisher_groups = c("Clca1_Neg", "Clca1_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2555,7 +3600,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin  <- plot_violin_stats(
@@ -2566,7 +3611,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin  <- plot_violin_stats(
   fisher_groups = c("Clca1_Neg", "Clca1_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2582,7 +3627,7 @@ p.Goblet.WT.Astrovirus1.Zg16.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WT.Astrovirus1.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WT.Astrovirus1.Zg16.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2594,7 +3639,7 @@ p.Goblet.WT.Astrovirus1.Zg16.violin  <- plot_violin_stats(
   fisher_groups = c("Zg16_Neg", "Zg16_Pos")
 )
 
-ggsave(p.Goblet.WT.Astrovirus1.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WT.Astrovirus1.Zg16.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2608,7 +3653,7 @@ p.Goblet.WTFFT.Astrovirus1.Zg16.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus1.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WTFFT.Astrovirus1.Zg16.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2620,7 +3665,7 @@ p.Goblet.WTFFT.Astrovirus1.Zg16.violin  <- plot_violin_stats(
   fisher_groups = c("Zg16_Neg", "Zg16_Pos")
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus1.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WTFFT.Astrovirus1.Zg16.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2635,7 +3680,7 @@ p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin  <- plot_violin_stats(
@@ -2646,7 +3691,7 @@ p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin  <- plot_violin_stats(
   fisher_groups = c("Zg16_Neg", "Zg16_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2660,7 +3705,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin  <- plot_violin_stats(
@@ -2671,7 +3716,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin  <- plot_violin_stats(
   fisher_groups = c("Zg16_Neg", "Zg16_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus1.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2702,7 +3747,7 @@ p.Goblet.WT.Astrovirus5.Muc2.violin  <- plot_violin_stats(
   fisher_groups = c("Muc2_Neg", "Muc2_Pos")
 )
 
-ggsave(p.Goblet.WT.Astrovirus5.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Muc2.violin.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WT.Astrovirus5.Muc2.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Muc2.violin.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2715,7 +3760,7 @@ p.Goblet.WTFFT.Astrovirus5.Muc2.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus5.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WTFFT.Astrovirus5.Muc2.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2727,7 +3772,7 @@ p.Goblet.WTFFT.Astrovirus5.Muc2.violin  <- plot_violin_stats(
   fisher_groups = c("Muc2_Neg", "Muc2_Pos")
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus5.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WTFFT.Astrovirus5.Muc2.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2741,7 +3786,7 @@ p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2753,7 +3798,7 @@ p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.violin  <- plot_violin_stats(
   fisher_groups = c("Muc2_Neg", "Muc2_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2768,7 +3813,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2780,7 +3825,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.violin  <- plot_violin_stats(
   fisher_groups = c("Muc2_Neg", "Muc2_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Muc2.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2799,7 +3844,7 @@ p.Goblet.WT.Astrovirus5.Fcgbp.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WT.Astrovirus5.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WT.Astrovirus5.Fcgbp.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2811,7 +3856,7 @@ p.Goblet.WT.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
   fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
 )
 
-ggsave(p.Goblet.WT.Astrovirus5.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WT.Astrovirus5.Fcgbp.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2825,7 +3870,7 @@ p.Goblet.WTFFT.Astrovirus5.Fcgbp.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus5.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WTFFT.Astrovirus5.Fcgbp.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
@@ -2836,7 +3881,7 @@ p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
   fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2849,7 +3894,7 @@ p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
@@ -2860,7 +3905,7 @@ p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
   fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2875,7 +3920,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
@@ -2886,7 +3931,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin  <- plot_violin_stats(
   fisher_groups = c("Fcgbp_Neg", "Fcgbp_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Fcgbp.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2914,7 +3959,7 @@ p.Goblet.WT.Astrovirus5.Clca1.violin  <- plot_violin_stats(
   fisher_groups = c("Clca1_Neg", "Clca1_Pos")
 )
 
-ggsave(p.Goblet.WT.Astrovirus5.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WT.Astrovirus5.Clca1.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2928,7 +3973,7 @@ p.Goblet.WTFFT.Astrovirus5.Clca1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus5.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WTFFT.Astrovirus5.Clca1.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.WTFFT.Astrovirus5.Clca1.violin  <- plot_violin_stats(
@@ -2939,7 +3984,7 @@ p.Goblet.WTFFT.Astrovirus5.Clca1.violin  <- plot_violin_stats(
   fisher_groups = c("Clca1_Neg", "Clca1_Pos")
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus5.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WTFFT.Astrovirus5.Clca1.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2952,7 +3997,7 @@ p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin  <- plot_violin_stats(
@@ -2963,7 +4008,7 @@ p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin  <- plot_violin_stats(
   fisher_groups = c("Clca1_Neg", "Clca1_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -2977,7 +4022,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -2989,7 +4034,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.violin  <- plot_violin_stats(
   fisher_groups = c("Clca1_Neg", "Clca1_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Clca1.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -3017,7 +4062,7 @@ p.Goblet.WT.Astrovirus5.Zg16.violin  <- plot_violin_stats(
   fisher_groups = c("Zg16_Neg", "Zg16_Pos")
 )
 
-ggsave(p.Goblet.WT.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WT.Astrovirus5.Zg16.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WT.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -3031,7 +4076,7 @@ p.Goblet.WTFFT.Astrovirus5.Zg16.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus5.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.WTFFT.Astrovirus5.Zg16.boxplot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -3043,7 +4088,7 @@ p.Goblet.WTFFT.Astrovirus5.Zg16.violin  <- plot_violin_stats(
   fisher_groups = c("Zg16_Neg", "Zg16_Pos")
 )
 
-ggsave(p.Goblet.WTFFT.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.WTFFT.Astrovirus5.Zg16.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.WTFFT.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -3057,7 +4102,7 @@ p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.boxplot <- plot_gene_boxplot(
   filter_zeros = TRUE
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -3069,7 +4114,7 @@ p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.violin  <- plot_violin_stats(
   fisher_groups = c("Zg16_Neg", "Zg16_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rg.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -3084,7 +4129,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.boxplot <- plot_gene_boxplot(
 )
 
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.boxplot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.boxplot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.boxplot.pdf",dpi = 600,width = 6,height = 6)
 
 
 
@@ -3096,7 +4141,7 @@ p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin  <- plot_violin_stats(
   fisher_groups = c("Zg16_Neg", "Zg16_Pos")
 )
 
-ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harshad/annotation/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
+ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin$plot,file="~/final_plots_update/perMegan/p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin.pdf",dpi = 600,height = 5,width = 5)
 
 
 
@@ -3106,9 +4151,6 @@ ggsave(p.Goblet.Rag2Il2rgIfnlr1.Astrovirus5.Zg16.violin$plot,file="~/scRNA/Harsh
 # violin plots for all samples (CD45+ cells)
 ```{r}
 
-unique(dataset.list[["epcam"]]@meta.data$custome.cell.annotation.split.tuft)
-
-unique(seurat.all@meta.data$custome.cell.annotation.split.tuft)
 
 seurat.all <- dataset.list[["cd45"]]
 seurat.all@meta.data$custome.cell.annotation.split.tuft <- factor(seurat.all@meta.data$custome.cell.annotation.split.tuft,levels = c("B cell","T cell","Macrophage","Erythroid","Erythoid cell","Mesenchymal Cell","Stromal"))
@@ -3120,44 +4162,44 @@ seurat.all@meta.data$modified.ident <- factor(seurat.all@meta.data$modified.iden
 
 
 violin_stl1_4samples_cd45 <- plot_violin(seurat.all,"Murine-astrovirus-STL1")
-ggsave(plot = violin_stl1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_stl1_4samples_cd45,file = "~/final_plots_update/stl1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_stl5_4samples_cd45 <- plot_violin(seurat.all,"Murine-astrovirus-STL5")
-ggsave(plot = violin_stl5_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_stl5_4samples_cd45,file = "~/final_plots_update/stl5_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_ifnl2_4samples_cd45 <- plot_violin(seurat.all,"Ifnl2")
-ggsave(plot = violin_ifnl2_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl2_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl2_4samples_cd45,file = "~/final_plots_update/Ifnl2_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_ifnl3_4samples_cd45 <- plot_violin(seurat.all,"Ifnl3")
-ggsave(plot = violin_ifnl3_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnl3_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl3_4samples_cd45,file = "~/final_plots_update/Ifnl3_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 violin_ifit1_4samples_cd45 <- plot_violin(seurat.all,"Ifit1")
-ggsave(plot = violin_ifit1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifit1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifit1_4samples_cd45,file = "~/final_plots_update/Ifit1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 violin_ifnb1_4samples_cd45 <- plot_violin(seurat.all,"Ifnb1")
-ggsave(plot = violin_ifnb1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnb1_4samples_cd45,file = "~/final_plots_update/Ifnb1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 
 # there is no Ifna5
 # violin_ifna5 <- plot_violin(seurat,"Ifna5")
-# ggsave(plot = violin_ifnb1,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
+# ggsave(plot = violin_ifnb1,file = "~/final_plots_update/Ifnb1_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 # ifnlr1/IFIH1
 violin_ifnlr1_4samples_cd45 <- plot_violin(seurat.all,"Ifnlr1")
-ggsave(plot = violin_ifnlr1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifnlr1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnlr1_4samples_cd45,file = "~/final_plots_update/Ifnlr1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_Ifih1_4samples_cd45 <- plot_violin(seurat.all,"Ifih1")
-ggsave(plot = violin_Ifih1_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/Ifih1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Ifih1_4samples_cd45,file = "~/final_plots_update/Ifih1_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_Ddx58_4samples_cd45 <- plot_violin(seurat.all,"Ddx58")
-ggsave(plot = violin_Ddx58_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/violin_Ddx58_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_Ddx58_4samples_cd45,file = "~/final_plots_update/violin_Ddx58_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 
@@ -3168,7 +4210,7 @@ seurat.all.Ifnl2.Ifnl3@meta.data$custome.cell.annotation.split.tuft <- factor(se
 
 
 violin_ifnl2.ifnl3_4samples_cd45 <- plot_violin(seurat.all.Ifnl2.Ifnl3,"Ifnl2")
-ggsave(plot = violin_ifnl2.ifnl3_4samples_cd45,file = "~/scRNA/Harshad/annotation/final_plots_update/ifnl2.ifnl3_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl2.ifnl3_4samples_cd45,file = "~/final_plots_update/ifnl2.ifnl3_violin_4samples_cd45.svg",width = 12, height = 5, dpi = 600)
 
 
 ```
@@ -3178,18 +4220,16 @@ ggsave(plot = violin_ifnl2.ifnl3_4samples_cd45,file = "~/scRNA/Harshad/annotatio
 ```{r}
 
 cd45.seurat <- subset(dataset.list[["cd45"]],subset = modified.ident %in% c("WT + FFT","WT naïve"))
-#seurat@meta.data$modified.ident <- droplevels(seurat@meta.data$modified.ident)
-# seurat@meta.data$custome.cell.annotation.final <- factor(seurat@meta.data$custome.cell.annotation.final,levels = c("TA/Stem","Enterocyte EP","Enterocyte LP","IP Enterocyte","ID Enterocyte","MP Enterocyte","MD Enterocyte","D Enterocyte","Enteroendocrine","Goblet","Paneth","Tuft","Stromal"))
 
 cd45.seurat@meta.data$modified.ident <- factor(cd45.seurat@meta.data$modified.ident,levels = c("WT naïve","WT + FFT"))
 
 
 violin_ifnl2 <- plot_violin(cd45.seurat,"Ifnl2")
-ggsave(plot = violin_ifnl2,file = "~/scRNA/Harshad/annotation/final_plots_update/cd45_Ifnl2_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl2,file = "~/final_plots_update/cd45_Ifnl2_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 violin_ifnl3 <- plot_violin(cd45.seurat,"Ifnl3")
-ggsave(plot = violin_ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update/cd45_Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
+ggsave(plot = violin_ifnl3,file = "~/final_plots_update/cd45_Ifnl3_violin.svg",width = 12, height = 5, dpi = 600)
 
 
 ```
@@ -3197,12 +4237,6 @@ ggsave(plot = violin_ifnl3,file = "~/scRNA/Harshad/annotation/final_plots_update
 
 # top 5 gene expression per cluster heatmap
 ```{r}
-
-library(Seurat)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(scales)
 
 # Step 1: Set your custom cluster ID as the active identity
 Idents(combined.all.final) <- "custome.cell.annotation.final"
@@ -3250,8 +4284,8 @@ p.top5.gene.expression <- ggplot(heatmap_long, aes(x = cluster, y = gene, fill =
   ) +
   labs(title = "Top 5 Expressed Genes per Custom Cluster",x = "",y = "")
 
-ggsave(p.top5.gene.expression,file = "~/scRNA/Harshad/annotation/final_plots_update/top5.gene.expression.svg",width = 8, height = 8, dpi = 600)
-ggsave(p.top5.gene.expression,file = "~/scRNA/Harshad/annotation/final_plots_update/top5.gene.expression.pdf",width = 8, height = 8, dpi = 600)
+ggsave(p.top5.gene.expression,file = "~/final_plots_update/top5.gene.expression.svg",width = 8, height = 8, dpi = 600)
+ggsave(p.top5.gene.expression,file = "~/final_plots_update/top5.gene.expression.pdf",width = 8, height = 8, dpi = 600)
 
 
 ```
@@ -3311,7 +4345,7 @@ stl5.ifnl3.plot <- ggplot(stl5.ifnl3.count,aes(Ifnl3, Murine.astrovirus.STL5)) +
                             axis.title = element_text(size = 10))
 
 
-ggsave(plot = stl5.ifnl3.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5.ifnl3.lm.svg",width = 7, height = 5, dpi = 600)
+ggsave(plot = stl5.ifnl3.plot,file = "~/final_plots_update/stl5.ifnl3.lm.svg",width = 7, height = 5, dpi = 600)
 
 
 
@@ -3321,7 +4355,7 @@ stl5.ifnl3.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 
                             axis.text.y = element_text(size = 10),
                             axis.title = element_text(size = 10))
 
-ggsave(plot = stl5.ifnl3.pearson.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5.ifnl3.pearson.svg",width = 7, height = 5, dpi = 600)
+ggsave(plot = stl5.ifnl3.pearson.plot,file = "~/final_plots_update/stl5.ifnl3.pearson.svg",width = 7, height = 5, dpi = 600)
 
 
 
@@ -3363,7 +4397,7 @@ stl5.ifnl2.plot <- ggplot(stl5.ifnl2.count,aes(Ifnl2, Murine.astrovirus.STL5)) +
                             axis.title = element_text(size = 10))
 
 
-ggsave(plot = stl5.ifnl2.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5.ifnl2.lm.svg",width = 7, height = 5, dpi = 600)
+ggsave(plot = stl5.ifnl2.plot,file = "~/final_plots_update/stl5.ifnl2.lm.svg",width = 7, height = 5, dpi = 600)
 
 # pearson
 stl5.ifnl2.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 = 'Ifnl2', feature2 = 'Murine-astrovirus-STL5') +
@@ -3371,7 +4405,7 @@ stl5.ifnl2.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 
                             axis.text.y = element_text(size = 10),
                             axis.title = element_text(size = 10))
 
-ggsave(plot = stl5.ifnl2.pearson.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl5.ifnl2.pearson.svg",width = 7, height = 5, dpi = 600)
+ggsave(plot = stl5.ifnl2.pearson.plot,file = "~/final_plots_update/stl5.ifnl2.pearson.svg",width = 7, height = 5, dpi = 600)
 
 
 
@@ -3417,7 +4451,7 @@ stl1.ifnl3.plot <- ggplot(stl1.ifnl3.count,aes(Ifnl3, Murine.astrovirus.STL1)) +
                             axis.title = element_text(size = 10))
 
 
-ggsave(plot = stl1.ifnl3.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1.ifnl3.lm.svg",width = 7, height = 5, dpi = 600)
+ggsave(plot = stl1.ifnl3.plot,file = "~/final_plots_update/stl1.ifnl3.lm.svg",width = 7, height = 5, dpi = 600)
 
 # pearson
 stl1.ifnl3.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 = 'Ifnl3', feature2 = 'Murine-astrovirus-STL1') +
@@ -3425,7 +4459,7 @@ stl1.ifnl3.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 
                             axis.text.y = element_text(size = 10),
                             axis.title = element_text(size = 10))
 
-ggsave(plot = stl1.ifnl3.pearson.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1.ifnl3.pearson.svg",width = 7, height = 5, dpi = 600)
+ggsave(plot = stl1.ifnl3.pearson.plot,file = "~/final_plots_update/stl1.ifnl3.pearson.svg",width = 7, height = 5, dpi = 600)
 
 
 # -----------------------------correlation of stl1 vs ifnl2---------------------------------------#
@@ -3469,7 +4503,7 @@ stl1.ifnl2.plot <- ggplot(stl1.ifnl2.count,aes(Ifnl2, Murine.astrovirus.STL1)) +
                             axis.title = element_text(size = 10))
 
 
-ggsave(plot = stl1.ifnl2.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1.ifnl2.lm.svg",width = 7, height = 5, dpi = 600)
+ggsave(plot = stl1.ifnl2.plot,file = "~/final_plots_update/stl1.ifnl2.lm.svg",width = 7, height = 5, dpi = 600)
 
 # pearson
 stl1.ifnl2.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 = 'Ifnl2', feature2 = 'Murine-astrovirus-STL1') +
@@ -3477,15 +4511,7 @@ stl1.ifnl2.pearson.plot <- FeatureScatter(object = seurat.epcam.wtfft, feature1 
                             axis.text.y = element_text(size = 10),
                             axis.title = element_text(size = 10))
 
-ggsave(plot = stl1.ifnl2.pearson.plot,file = "~/scRNA/Harshad/annotation/final_plots_update/stl1.ifnl2.pearson.svg",width = 7, height = 5, dpi = 600)
-
-
-
-# --------------------------correlation of stl1+stl5 vs ifnl2+ifnl3 (only keep ifnl2+ifnl3 non-0 cells)-----------------------#
-
-
-
-
+ggsave(plot = stl1.ifnl2.pearson.plot,file = "~/final_plots_update/stl1.ifnl2.pearson.svg",width = 7, height = 5, dpi = 600)
 
 
 
@@ -3598,7 +4624,7 @@ WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig <- WTFFT_WTnaive.WTFFT.MD_enteroc
                                                  mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig.csv")
+write.csv(WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig.csv")
 
 
 WTFFT_WTnaive.WTFFT.MD_enterocyte.p <- ggplot(WTFFT_WTnaive.WTFFT.MD_enterocyte.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -3611,7 +4637,7 @@ WTFFT_WTnaive.WTFFT.MD_enterocyte.p <- ggplot(WTFFT_WTnaive.WTFFT.MD_enterocyte.
                                       theme_minimal()
 
      
-ggsave(WTFFT_WTnaive.WTFFT.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTFFT_WTnaive.WTFFT.MD_enterocyte.p,file = "~/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 
 #---------------------------------------WT naive------------------------------------------#
@@ -3633,7 +4659,7 @@ WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig <- WTnaive_WTnaive.WTFFT.MD_ent
                                                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig.csv")
+write.csv(WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes.sig.csv")
 
 WTnaive_WTnaive.WTFFT.MD_enterocyte.p <- ggplot(WTnaive_WTnaive.WTFFT.MD_enterocyte.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
                             geom_col(aes(fill= padj < 0.05)) +
@@ -3645,7 +4671,7 @@ WTnaive_WTnaive.WTFFT.MD_enterocyte.p <- ggplot(WTnaive_WTnaive.WTFFT.MD_enteroc
                             theme_minimal()
 
      
-ggsave(WTnaive_WTnaive.WTFFT.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTnaive_WTnaive.WTFFT.MD_enterocyte.p,file = "~/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 ```
 
@@ -3682,7 +4708,7 @@ Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig <- Naive_Naive.Rag2.MD_enterocy
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
+write.csv(Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
 
 
 Naive_Naive.Rag2.MD_enterocyte.p <- ggplot(Naive_Naive.Rag2.MD_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -3695,7 +4721,7 @@ Naive_Naive.Rag2.MD_enterocyte.p <- ggplot(Naive_Naive.Rag2.MD_enterocyte.gsea.f
                                     theme_minimal()
 
      
-ggsave(Naive_Naive.Rag2.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Naive_Naive.Rag2.MD_enterocyte.p,file = "~/final_plots_update/pathway/svg/Naive_Naive.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 
 
@@ -3719,7 +4745,7 @@ Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig <- Rag2_Naive.Rag2.MD_enterocyte
                                                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
+write.csv(Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
 
 Rag2_Naive.Rag2.MD_enterocyte.p <- ggplot(Rag2_Naive.Rag2.MD_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
                             geom_col(aes(fill= padj < 0.05)) +
@@ -3731,7 +4757,7 @@ Rag2_Naive.Rag2.MD_enterocyte.p <- ggplot(Rag2_Naive.Rag2.MD_enterocyte.gsea.fgs
                             theme_minimal()
 
      
-ggsave(Rag2_Naive.Rag2.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Rag2_Naive.Rag2.MD_enterocyte.p,file = "~/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 ```
 
@@ -3766,7 +4792,7 @@ WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig <- WTFFT_WTFFT.Rag2.MD_enterocy
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
+write.csv(WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
 
 
 WTFFT_WTFFT.Rag2.MD_enterocyte.p <- ggplot(WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -3779,7 +4805,7 @@ WTFFT_WTFFT.Rag2.MD_enterocyte.p <- ggplot(WTFFT_WTFFT.Rag2.MD_enterocyte.gsea.f
                                     theme_minimal()
 
      
-ggsave(WTFFT_WTFFT.Rag2.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTFFT_WTFFT.Rag2.MD_enterocyte.p,file = "~/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 
 
@@ -3803,7 +4829,7 @@ Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig <- Rag2_WTFFT.Rag2.MD_enterocyte
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
+write.csv(Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgseaRes.sig.csv")
 
 
 
@@ -3818,7 +4844,7 @@ Rag2_WTFFT.Rag2.MD_enterocyte.p <- ggplot(Rag2_WTFFT.Rag2.MD_enterocyte.gsea.fgs
                                     theme_minimal()
 
      
-ggsave(Rag2_WTFFT.Rag2.MD_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Rag2_WTFFT.Rag2.MD_enterocyte.p,file = "~/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MD_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 
 ```
@@ -3861,7 +4887,7 @@ WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig <- WTFFT_WTnaive.WTFFT.MP_enteroc
                                                  mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig.csv")
+write.csv(WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig.csv")
 
 
 WTFFT_WTnaive.WTFFT.MP_enterocyte.p <- ggplot(WTFFT_WTnaive.WTFFT.MP_enterocyte.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -3874,7 +4900,7 @@ WTFFT_WTnaive.WTFFT.MP_enterocyte.p <- ggplot(WTFFT_WTnaive.WTFFT.MP_enterocyte.
                                       theme_minimal()
 
      
-ggsave(WTFFT_WTnaive.WTFFT.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTFFT_WTnaive.WTFFT.MP_enterocyte.p,file = "~/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 
 #---------------------------------------WT naive------------------------------------------#
@@ -3896,7 +4922,7 @@ WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig <- WTnaive_WTnaive.WTFFT.MP_ent
                                                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig.csv")
+write.csv(WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes.sig.csv")
 
 WTnaive_WTnaive.WTFFT.MP_enterocyte.p <- ggplot(WTnaive_WTnaive.WTFFT.MP_enterocyte.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
                             geom_col(aes(fill= padj < 0.05)) +
@@ -3908,7 +4934,7 @@ WTnaive_WTnaive.WTFFT.MP_enterocyte.p <- ggplot(WTnaive_WTnaive.WTFFT.MP_enteroc
                             theme_minimal()
 
      
-ggsave(WTnaive_WTnaive.WTFFT.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTnaive_WTnaive.WTFFT.MP_enterocyte.p,file = "~/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 ```
 
@@ -3945,7 +4971,7 @@ Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig <- Naive_Naive.Rag2.MP_enterocy
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
+write.csv(Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
 
 
 Naive_Naive.Rag2.MP_enterocyte.p <- ggplot(Naive_Naive.Rag2.MP_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -3958,7 +4984,7 @@ Naive_Naive.Rag2.MP_enterocyte.p <- ggplot(Naive_Naive.Rag2.MP_enterocyte.gsea.f
                                     theme_minimal()
 
      
-ggsave(Naive_Naive.Rag2.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Naive_Naive.Rag2.MP_enterocyte.p,file = "~/final_plots_update/pathway/svg/Naive_Naive.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 
 
@@ -3982,7 +5008,7 @@ Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig <- Rag2_Naive.Rag2.MP_enterocyte
                                                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
+write.csv(Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
 
 Rag2_Naive.Rag2.MP_enterocyte.p <- ggplot(Rag2_Naive.Rag2.MP_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
                             geom_col(aes(fill= padj < 0.05)) +
@@ -3994,7 +5020,7 @@ Rag2_Naive.Rag2.MP_enterocyte.p <- ggplot(Rag2_Naive.Rag2.MP_enterocyte.gsea.fgs
                             theme_minimal()
 
      
-ggsave(Rag2_Naive.Rag2.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Rag2_Naive.Rag2.MP_enterocyte.p,file = "~/final_plots_update/pathway/svg/Rag2_Naive.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 ```
 
@@ -4029,7 +5055,7 @@ WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig <- WTFFT_WTFFT.Rag2.MP_enterocy
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
+write.csv(WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
 
 
 WTFFT_WTFFT.Rag2.MP_enterocyte.p <- ggplot(WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -4042,7 +5068,7 @@ WTFFT_WTFFT.Rag2.MP_enterocyte.p <- ggplot(WTFFT_WTFFT.Rag2.MP_enterocyte.gsea.f
                                     theme_minimal()
 
      
-ggsave(WTFFT_WTFFT.Rag2.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTFFT_WTFFT.Rag2.MP_enterocyte.p,file = "~/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 
 
@@ -4066,7 +5092,7 @@ Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig <- Rag2_WTFFT.Rag2.MP_enterocyte
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
+write.csv(Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgseaRes.sig.csv")
 
 
 
@@ -4081,7 +5107,7 @@ Rag2_WTFFT.Rag2.MP_enterocyte.p <- ggplot(Rag2_WTFFT.Rag2.MP_enterocyte.gsea.fgs
                                     theme_minimal()
 
      
-ggsave(Rag2_WTFFT.Rag2.MP_enterocyte.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Rag2_WTFFT.Rag2.MP_enterocyte.p,file = "~/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.MP_enterocyte.p.svg",width = 22, height = 10, dpi = 600)
 
 
 ```
@@ -4125,7 +5151,7 @@ WTFFT_WTnaive.WTFFT.Goblet.fgseaRes.sig <- WTFFT_WTnaive.WTFFT.Goblet.fgseaRes %
                                                  mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTFFT_WTnaive.WTFFT.Goblet.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.Goblet.fgseaRes.sig.csv")
+write.csv(WTFFT_WTnaive.WTFFT.Goblet.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.Goblet.fgseaRes.sig.csv")
 
 
 WTFFT_WTnaive.WTFFT.Goblet.p <- ggplot(WTFFT_WTnaive.WTFFT.Goblet.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -4138,7 +5164,7 @@ WTFFT_WTnaive.WTFFT.Goblet.p <- ggplot(WTFFT_WTnaive.WTFFT.Goblet.fgseaRes %>% m
                                       theme_minimal()
 
      
-ggsave(WTFFT_WTnaive.WTFFT.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTFFT_WTnaive.WTFFT.Goblet.p,file = "~/final_plots_update/pathway/svg/WTFFT_WTnaive.WTFFT.Goblet.p.svg",width = 22, height = 10, dpi = 600)
 
 
 #---------------------------------------WT naive------------------------------------------#
@@ -4160,7 +5186,7 @@ WTnaive_WTnaive.WTFFT.Goblet.fgseaRes.sig <- WTnaive_WTnaive.WTFFT.Goblet.fgseaR
                                                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTnaive_WTnaive.WTFFT.Goblet.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.Goblet.fgseaRes.sig.csv")
+write.csv(WTnaive_WTnaive.WTFFT.Goblet.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.Goblet.fgseaRes.sig.csv")
 
 WTnaive_WTnaive.WTFFT.Goblet.p <- ggplot(WTnaive_WTnaive.WTFFT.Goblet.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
                             geom_col(aes(fill= padj < 0.05)) +
@@ -4172,7 +5198,7 @@ WTnaive_WTnaive.WTFFT.Goblet.p <- ggplot(WTnaive_WTnaive.WTFFT.Goblet.fgseaRes %
                             theme_minimal()
 
      
-ggsave(WTnaive_WTnaive.WTFFT.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTnaive_WTnaive.WTFFT.Goblet.p,file = "~/final_plots_update/pathway/svg/WTnaive_WTnaive.WTFFT.Goblet.p.svg",width = 22, height = 10, dpi = 600)
 
 ```
 
@@ -4209,7 +5235,7 @@ Naive_Naive.Rag2.Goblet.gsea.fgseaRes.sig <- Naive_Naive.Rag2.Goblet.gsea.fgseaR
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Naive_Naive.Rag2.Goblet.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.Goblet.gsea.fgseaRes.sig.csv")
+write.csv(Naive_Naive.Rag2.Goblet.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Naive_Naive.Rag2.Goblet.gsea.fgseaRes.sig.csv")
 
 
 Naive_Naive.Rag2.Goblet.p <- ggplot(Naive_Naive.Rag2.Goblet.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -4222,7 +5248,7 @@ Naive_Naive.Rag2.Goblet.p <- ggplot(Naive_Naive.Rag2.Goblet.gsea.fgseaRes %>% mu
                                     theme_minimal()
 
      
-ggsave(Naive_Naive.Rag2.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Naive_Naive.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Naive_Naive.Rag2.Goblet.p,file = "~/final_plots_update/pathway/svg/Naive_Naive.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
 
 
 
@@ -4246,7 +5272,7 @@ Rag2_Naive.Rag2.Goblet.gsea.fgseaRes.sig <- Rag2_Naive.Rag2.Goblet.gsea.fgseaRes
                                                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Rag2_Naive.Rag2.Goblet.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.Goblet.gsea.fgseaRes.sig.csv")
+write.csv(Rag2_Naive.Rag2.Goblet.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Rag2_Naive.Rag2.Goblet.gsea.fgseaRes.sig.csv")
 
 Rag2_Naive.Rag2.Goblet.p <- ggplot(Rag2_Naive.Rag2.Goblet.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
                             geom_col(aes(fill= padj < 0.05)) +
@@ -4258,7 +5284,7 @@ Rag2_Naive.Rag2.Goblet.p <- ggplot(Rag2_Naive.Rag2.Goblet.gsea.fgseaRes %>% muta
                             theme_minimal()
 
      
-ggsave(Rag2_Naive.Rag2.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_Naive.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Rag2_Naive.Rag2.Goblet.p,file = "~/final_plots_update/pathway/svg/Rag2_Naive.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
 
 ```
 
@@ -4293,7 +5319,7 @@ WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig <- WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaR
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig.csv")
+write.csv(WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig.csv")
 
 
 WTFFT_WTFFT.Rag2.Goblet.p <- ggplot(WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes %>% mutate(pathway = gsub("HALLMARK_", "", pathway)),aes(reorder(pathway, NES), NES)) +
@@ -4306,7 +5332,7 @@ WTFFT_WTFFT.Rag2.Goblet.p <- ggplot(WTFFT_WTFFT.Rag2.Goblet.gsea.fgseaRes %>% mu
                                     theme_minimal()
 
      
-ggsave(WTFFT_WTFFT.Rag2.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(WTFFT_WTFFT.Rag2.Goblet.p,file = "~/final_plots_update/pathway/svg/WTFFT_WTFFT.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
 
 
 
@@ -4330,7 +5356,7 @@ Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig <- Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes
                      mutate(leadingEdge = vapply(leadingEdge,paste,collapse = "_", character(1L)))
 
 
-write.csv(Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig,"~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig.csv")
+write.csv(Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig,"~/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes.sig.csv")
 
 
 
@@ -4345,7 +5371,7 @@ Rag2_WTFFT.Rag2.Goblet.p <- ggplot(Rag2_WTFFT.Rag2.Goblet.gsea.fgseaRes %>% muta
                                     theme_minimal()
 
      
-ggsave(Rag2_WTFFT.Rag2.Goblet.p,file = "~/scRNA/Harshad/annotation/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
+ggsave(Rag2_WTFFT.Rag2.Goblet.p,file = "~/final_plots_update/pathway/svg/Rag2_WTFFT.Rag2.Goblet.p.svg",width = 22, height = 10, dpi = 600)
 
 
 ```
